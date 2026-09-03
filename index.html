@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GeoMine Intelligence — AI-Powered Geological & Mining Reporting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+/* ============ DESIGN TOKENS ============ */
+:root{
+  --coal-950:#0a0d0c;
+  --coal-900:#0e1210;
+  --coal-850:#121815;
+  --coal-800:#161d19;
+  --coal-700:#1d2620;
+  --coal-600:#26312a;
+  --line:#26332c;
+  --navy:#16222f;
+  --navy-light:#1d3348;
+  --green-950:#0c2118;
+  --green-800:#134430;
+  --green-600:#1c6b48;
+  --emerald:#34d399;
+  --emerald-dim:#1f8f68;
+  --amber:#e8a83c;
+  --red:#e0685a;
+  --brown:#8a6142;
+  --text-hi:#eef2ef;
+  --text-mid:#aab6ae;
+  --text-dim:#718278;
+  --font-display:'Sora', sans-serif;
+  --font-body:'Inter', sans-serif;
+  --font-mono:'JetBrains Mono', monospace;
+  --shadow:0 12px 24px rgba(0,0,0,0.4);
+  --radius:12px;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  background:var(--coal-950);
+  color:var(--text-hi);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection{background:var(--emerald-dim); color:#fff;}
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-track{background:var(--coal-900);}
+::-webkit-scrollbar-thumb{background:var(--coal-600); border-radius:6px;}
+::-webkit-scrollbar-thumb:hover{background:var(--green-600);}
+a{color:inherit;}
+button{font-family:inherit; cursor:pointer;}
+:focus-visible{outline:2px solid var(--emerald); outline-offset:2px;}
+
+/* strata background motif */
+.strata-bg{
+  position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+}
+
+/* ============ LOGIN SCREEN ============ */
+#login-screen{
+  position:fixed; inset:0; z-index:50;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(1200px 600px at 15% 10%, rgba(28,107,72,0.16), transparent 60%),
+    radial-gradient(900px 500px at 85% 90%, rgba(22,34,47,0.5), transparent 60%),
+    var(--coal-950);
+}
+.login-strata{position:absolute; inset:0; opacity:0.35;}
+.login-card{
+  position:relative; z-index:2;
+  width:min(420px, 92vw);
+  background:linear-gradient(180deg, var(--coal-850), var(--coal-900));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:40px 36px 32px;
+  box-shadow:var(--shadow);
+}
+.login-eyebrow{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--emerald); margin-bottom:14px; display:flex; align-items:center; gap:8px;
+}
+.login-eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--emerald); box-shadow:0 0 8px var(--emerald);}
+.login-title{
+  font-family:var(--font-display); font-weight:800; font-size:30px; letter-spacing:-0.02em; line-height:1.15;
+  margin-bottom:6px; text-shadow:0 0 15px rgba(52,211,153,0.5), 0 0 30px rgba(52,211,153,0.3); color:var(--text-hi);
+}
+.login-sub{color:var(--text-mid); font-size:14px; margin-bottom:28px; line-height:1.5;}
+.field{margin-bottom:16px;}
+.field label{display:block; font-size:12px; color:var(--text-mid); margin-bottom:6px; font-weight:500;}
+.field input{
+  width:100%; padding:11px 13px; background:var(--coal-800); border:1px solid var(--line);
+  border-radius:8px; color:var(--text-hi); font-size:14px; font-family:inherit;
+}
+.field input:focus{border-color:var(--emerald-dim);}
+.btn{
+  border:none; border-radius:8px; padding:12px 18px; font-weight:600; font-size:14px;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:transform .12s ease, filter .12s ease;
+}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:var(--emerald); color:#06231a; width:100%; margin-top:6px; box-shadow:0 0 15px rgba(52,211,153,0.3);}
+.btn-primary:hover{filter:brightness(1.08); box-shadow:0 0 25px rgba(52,211,153,0.6);}
+.btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text-mid); width:100%; margin-top:10px;}
+.btn-ghost:hover{border-color:var(--emerald-dim); color:var(--text-hi);}
+.login-foot{margin-top:22px; padding-top:18px; border-top:1px solid var(--line); font-size:11px; color:var(--text-dim); text-align:center; font-family:var(--font-mono);}
+
+/* ============ APP SHELL ============ */
+#app{display:none; height:100vh; overflow:hidden; position:relative; z-index:1;}
+.app-grid{display:grid; grid-template-columns:236px 1fr; height:100vh;}
+
+/* SIDEBAR */
+.sidebar{
+  background:var(--coal-900); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; overflow-y:auto;
+}
+.brand{
+  padding:20px 18px 16px; border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:10px;
+}
+.brand-mark{
+  width:34px; height:34px; border-radius:8px;
+  background:linear-gradient(135deg, var(--green-600), var(--navy));
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  font-family:var(--font-display); font-weight:800; font-size:15px; color:var(--emerald);
+  border:1px solid var(--green-600);
+}
+.brand-text{line-height:1.2;}
+.brand-name{font-family:var(--font-display); font-weight:700; font-size:14.5px; letter-spacing:-0.01em; text-shadow:0 0 12px rgba(52,211,153,0.6), 0 0 24px rgba(52,211,153,0.4); color:var(--emerald);}
+.brand-tag{font-size:10px; color:var(--text-dim); font-family:var(--font-mono);}
+.nav{padding:14px 10px; flex:1;}
+.nav-group-label{font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); padding:10px 10px 6px; font-weight:600;}
+.nav-item{
+  display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:8px;
+  color:var(--text-mid); font-size:13.5px; font-weight:500; cursor:pointer; margin-bottom:2px;
+  border:1px solid transparent; transition:background .12s ease, color .12s ease;
+}
+.nav-item:hover{background:var(--coal-800); color:var(--text-hi);}
+.nav-item.active{background:var(--green-950); color:var(--emerald); border-color:var(--green-800);}
+.nav-icon{width:17px; height:17px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+.nav-item svg{width:17px; height:17px;}
+.sidebar-foot{padding:14px 16px; border-top:1px solid var(--line); font-size:11px; color:var(--text-dim); font-family:var(--font-mono); line-height:1.6;}
+
+/* MAIN */
+.main{display:flex; flex-direction:column; overflow:hidden; position:relative;}
+.topbar{
+  height:60px; border-bottom:1px solid var(--line); background:rgba(14,18,16,0.9); backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:space-between; padding:0 22px; gap:16px; z-index:5;
+}
+.breadcrumb{font-size:12px; color:var(--text-dim); font-family:var(--font-mono); display:flex; align-items:center; gap:6px;}
+.breadcrumb b{color:var(--text-hi); font-weight:600;}
+.topbar-search{
+  flex:1; max-width:420px; display:flex; align-items:center; gap:8px;
+  background:var(--coal-800); border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+  color:var(--text-dim); font-size:13px;
+}
+.topbar-search input{background:none; border:none; color:var(--text-hi); font-size:13px; width:100%; font-family:inherit;}
+.topbar-right{display:flex; align-items:center; gap:14px;}
+.icon-btn{
+  width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:var(--coal-800);
+  display:flex; align-items:center; justify-content:center; color:var(--text-mid); position:relative;
+}
+.icon-btn:hover{color:var(--text-hi); border-color:var(--green-600);}
+.icon-btn .dot{position:absolute; top:6px; right:6px; width:7px; height:7px; border-radius:50%; background:var(--amber); border:2px solid var(--coal-800);}
+.user-chip{display:flex; align-items:center; gap:9px; padding:5px 10px 5px 5px; border:1px solid var(--line); border-radius:22px; background:var(--coal-800);}
+.avatar{width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg, var(--emerald-dim), var(--navy)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;}
+.user-meta{line-height:1.2;}
+.user-name{font-size:12px; font-weight:600;}
+.user-role{font-size:10px; color:var(--text-dim);}
+
+.content{flex:1; overflow-y:auto; padding:26px 28px 60px;}
+.page{display:none; animation:fadein .25s ease;}
+.page.active{display:block;}
+@keyframes fadein{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+.page-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; gap:16px; flex-wrap:wrap;}
+.page-title{font-family:var(--font-display); font-weight:700; font-size:22px; letter-spacing:-0.01em; margin-bottom:4px; text-shadow:0 0 10px rgba(52,211,153,0.3);}
+.page-sub{color:var(--text-mid); font-size:13.5px; max-width:560px; line-height:1.5;}
+
+/* ============ COMPONENTS ============ */
+.card{
+  background:var(--coal-850); border:1px solid var(--line); border-radius:var(--radius);
+  padding:18px 20px; transition:border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover{
+  border-color:var(--emerald-dim);
+  box-shadow:0 0 15px rgba(52,211,153,0.15);
+}
+.grid{display:grid; gap:16px;}
+.kpi-grid{grid-template-columns:repeat(6,1fr); margin-bottom:20px;}
+.kpi-card{padding:16px 16px;}
+.kpi-label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; font-weight:600;}
+.kpi-value{font-family:var(--font-display); font-size:24px; font-weight:700; letter-spacing:-0.01em; text-shadow:0 0 15px rgba(255,255,255,0.2), 0 0 8px rgba(52,211,153,0.3);}
+.kpi-delta{font-size:11px; margin-top:8px; display:flex; align-items:center; gap:5px; font-family:var(--font-mono);}
+.kpi-delta.up{color:var(--emerald);}
+.kpi-delta.warn{color:var(--amber);}
+
+.two-col{grid-template-columns:1.4fr 1fr;}
+.three-col{grid-template-columns:repeat(3,1fr);}
+
+.card-title-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+.card-title{font-family:var(--font-display); font-weight:600; font-size:14px; text-shadow:0 0 8px rgba(52,211,153,0.3); color:var(--text-hi);}
+.card-meta{font-size:11px; color:var(--text-dim); font-family:var(--font-mono);}
+
+.badge{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; font-size:10.5px; font-weight:600; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.03em;}
+.badge-pass{background:rgba(52,211,153,0.12); color:var(--emerald); border:1px solid rgba(52,211,153,0.25);}
+.badge-warn{background:rgba(232,168,60,0.12); color:var(--amber); border:1px solid rgba(232,168,60,0.25);}
+.badge-error{background:rgba(224,104,90,0.12); color:var(--red); border:1px solid rgba(224,104,90,0.25);}
+.badge-info{background:rgba(29,51,72,0.5); color:#8fb4d6; border:1px solid var(--navy-light);}
+.badge-neutral{background:var(--coal-700); color:var(--text-mid); border:1px solid var(--line);}
+
+table{width:100%; border-collapse:collapse; font-size:13px;}
+th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); padding:8px 12px; border-bottom:1px solid var(--line); font-weight:600;}
+td{padding:11px 12px; border-bottom:1px solid var(--coal-700); color:var(--text-hi); vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tbody tr{transition:background .12s ease;}
+tbody tr:hover{background:var(--coal-800);}
+.mono{font-family:var(--font-mono); font-size:12px; color:var(--text-mid);}
+.confidence{font-family:var(--font-mono); font-weight:600;}
+.confidence.high{color:var(--emerald);}
+.confidence.mid{color:var(--amber);}
+.confidence.low{color:var(--red);}
+
+.link-btn{background:none; border:none; color:var(--emerald); font-size:12.5px; font-weight:600; padding:4px 0;}
+.link-btn:hover{text-decoration:underline;}
+
+.section-gap{margin-bottom:20px;}
+
+/* progress bar */
+.progress-track{height:6px; border-radius:4px; background:var(--coal-700); overflow:hidden;}
+.progress-fill{height:100%; background:linear-gradient(90deg, var(--emerald-dim), var(--emerald)); border-radius:4px; transition:width .4s ease;}
+
+/* buttons variants */
+.btn-sm{padding:8px 14px; font-size:12.5px; border-radius:7px;}
+.btn-solid-green{background:var(--emerald); color:#06231a; border:none; font-weight:600;}
+.btn-solid-green:hover{filter:brightness(1.08);}
+.btn-outline{background:transparent; border:1px solid var(--line); color:var(--text-mid);}
+.btn-outline:hover{border-color:var(--emerald-dim); color:var(--text-hi);}
+.btn-navy{background:var(--navy); border:1px solid var(--navy-light); color:#cfe0f0;}
+.btn-navy:hover{background:var(--navy-light);}
+
+/* upload zone */
+.upload-zone{
+  border:1.5px dashed var(--line); border-radius:12px; padding:44px 20px; text-align:center;
+  background:var(--coal-850); transition:border-color .15s ease, background .15s ease;
+}
+.upload-zone.drag{border-color:var(--emerald); background:var(--green-950);}
+.upload-icon{width:44px; height:44px; margin:0 auto 14px; color:var(--emerald-dim);}
+.upload-title{font-weight:600; font-size:15px; margin-bottom:5px;}
+.upload-sub{font-size:12.5px; color:var(--text-dim); margin-bottom:18px;}
+.filetypes{font-size:11px; color:var(--text-dim); font-family:var(--font-mono); margin-top:14px;}
+
+/* pipeline timeline */
+.pipeline-row{display:flex; align-items:center; gap:0; margin:22px 0 8px; overflow-x:auto; padding-bottom:6px;}
+.pipe-step{display:flex; flex-direction:column; align-items:center; min-width:96px; position:relative;}
+.pipe-dot{width:28px; height:28px; border-radius:50%; background:var(--coal-700); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; z-index:2; transition:all .3s ease;}
+.pipe-step.done .pipe-dot{background:var(--green-800); border-color:var(--emerald-dim); color:var(--emerald);}
+.pipe-step.active .pipe-dot{background:var(--emerald); border-color:var(--emerald); color:#06231a; box-shadow:0 0 0 4px rgba(52,211,153,0.15);}
+.pipe-label{font-size:10.5px; color:var(--text-dim); margin-top:8px; text-align:center; line-height:1.3; max-width:88px;}
+.pipe-step.done .pipe-label, .pipe-step.active .pipe-label{color:var(--text-hi);}
+.pipe-line{flex:1; height:2px; background:var(--line); margin-top:-22px; min-width:20px;}
+.pipe-line.done{background:var(--emerald-dim);}
+
+/* toast */
+#toast-wrap{position:fixed; bottom:22px; right:22px; z-index:200; display:flex; flex-direction:column; gap:10px; align-items:flex-end;}
+.toast{
+  background:var(--coal-800); border:1px solid var(--line); border-left:3px solid var(--emerald);
+  border-radius:8px; padding:12px 16px; min-width:280px; max-width:360px; box-shadow:var(--shadow);
+  font-size:13px; animation:toastin .2s ease; display:flex; gap:10px; align-items:flex-start;
+}
+.toast.warn{border-left-color:var(--amber);}
+.toast.error{border-left-color:var(--red);}
+@keyframes toastin{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
+.toast-title{font-weight:600; margin-bottom:2px;}
+.toast-body{color:var(--text-mid); font-size:12px;}
+
+/* modal */
+.modal-overlay{position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:999; display:none; align-items:center; justify-content:center;}
+.modal{background:var(--coal-850); border:1px solid var(--line); border-radius:14px; width:min(680px,92vw); max-height:86vh; overflow-y:auto; box-shadow:var(--shadow); animation:fadein .18s ease;}
+.modal-head{padding:18px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--coal-850); z-index:2;}
+.modal-title{font-family:var(--font-display); font-weight:700; font-size:16px;}
+.modal-body{padding:22px;}
+.modal-close{background:none; border:none; color:var(--text-dim); font-size:20px; line-height:1;}
+.modal-close:hover{color:var(--text-hi);}
+
+/* chat */
+.chat-wrap{display:grid; grid-template-columns:260px 1fr; gap:16px; height:calc(100vh - 190px);}
+.chat-suggested{display:flex; flex-direction:column; gap:8px;}
+.suggested-q{
+  text-align:left; background:var(--coal-850); border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+  font-size:12.5px; color:var(--text-mid); line-height:1.4;
+}
+.suggested-q:hover{border-color:var(--emerald-dim); color:var(--text-hi);}
+.chat-panel{display:flex; flex-direction:column; background:var(--coal-850); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+.chat-messages{flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px;}
+.msg{max-width:78%; padding:12px 15px; border-radius:12px; font-size:13.5px; line-height:1.55;}
+.msg.user{align-self:flex-end; background:var(--green-800); border:1px solid var(--green-600); border-bottom-right-radius:3px;}
+.msg.ai{align-self:flex-start; background:var(--coal-800); border:1px solid var(--line); border-bottom-left-radius:3px; max-width:82%;}
+.msg-meta-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+.chat-input-row{display:flex; gap:10px; padding:14px 16px; border-top:1px solid var(--line);}
+.chat-input-row input{flex:1; background:var(--coal-800); border:1px solid var(--line); border-radius:8px; padding:11px 14px; color:var(--text-hi); font-size:13.5px; font-family:inherit;}
+
+/* word cloud */
+.wordcloud{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 14px; padding:30px 10px;}
+.wc-word{font-family:var(--font-display); font-weight:700; cursor:pointer; transition:transform .15s ease, text-shadow .15s ease;}
+.wc-word:hover{transform:scale(1.15) translateZ(0); text-shadow:0 4px 12px rgba(0,0,0,0.5);}
+
+/* status chip */
+.chip{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; padding:4px 10px; border-radius:6px; background:var(--coal-700); color:var(--text-mid); font-weight:500;}
+
+/* traceability chain */
+.trace-chain{display:flex; flex-direction:column; gap:0;}
+.trace-node{display:flex; gap:14px; padding:16px 0; position:relative;}
+.trace-node:not(:last-child)::before{content:''; position:absolute; left:17px; top:44px; bottom:-6px; width:2px; background:var(--line);}
+.trace-marker{width:36px; height:36px; border-radius:50%; background:var(--green-950); border:2px solid var(--emerald-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:2; color:var(--emerald); font-weight:700; font-size:13px;}
+.trace-content{flex:1; padding-top:2px;}
+.trace-label{font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); font-weight:600; margin-bottom:4px;}
+.trace-value{font-size:14px; font-weight:500; margin-bottom:4px;}
+.trace-detail{font-size:12px; color:var(--text-mid); font-family:var(--font-mono);}
+
+/* map */
+.mine-map{position:relative; height:340px; background:var(--coal-900); border-radius:10px; border:1px solid var(--line); overflow:hidden;}
+.map-marker{position:absolute; width:14px; height:14px; border-radius:50%; background:var(--emerald); border:2px solid #06231a; cursor:pointer; box-shadow:0 0 0 4px rgba(52,211,153,0.15);}
+.map-marker:hover{transform:scale(1.3);}
+.map-marker.warn{background:var(--amber); box-shadow:0 0 0 4px rgba(232,168,60,0.15);}
+.map-tooltip{position:absolute; background:var(--coal-800); border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:11.5px; min-width:150px; box-shadow:var(--shadow); pointer-events:none; z-index:10; display:none;}
+
+/* filters row */
+.filter-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
+.select-f, .search-f{background:var(--coal-800); border:1px solid var(--line); border-radius:7px; padding:8px 12px; color:var(--text-hi); font-size:12.5px; font-family:inherit;}
+.select-f{min-width:140px;}
+.search-f{min-width:220px;}
+
+/* doc grid */
+.doc-cards{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:14px;}
+.doc-card{background:var(--coal-850); border:1px solid var(--line); border-radius:10px; padding:15px; cursor:pointer; transition:border-color .15s ease;}
+.doc-card:hover{border-color:var(--emerald-dim);}
+.doc-card-icon{width:32px; height:32px; border-radius:7px; background:var(--navy); display:flex; align-items:center; justify-content:center; margin-bottom:10px; color:#8fb4d6; font-size:12px; font-weight:700; font-family:var(--font-mono);}
+.doc-card-name{font-weight:600; font-size:13px; margin-bottom:6px; line-height:1.35;}
+.doc-card-meta{font-size:11px; color:var(--text-dim); margin-bottom:10px;}
+.doc-tags{display:flex; gap:5px; flex-wrap:wrap;}
+.tag{font-size:10px; background:var(--coal-700); color:var(--text-mid); padding:2px 7px; border-radius:5px;}
+
+/* empty state */
+.empty-state{text-align:center; padding:50px 20px; color:var(--text-dim);}
+.empty-state svg{width:40px; height:40px; margin-bottom:12px; opacity:0.5;}
+
+/* source citation card */
+.source-card{background:var(--coal-800); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-top:8px;}
+.source-card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+.source-card-title{font-size:12.5px; font-weight:600;}
+
+/* report preview */
+.report-doc{background:#f4f2ec; color:#1a1a1a; border-radius:8px; padding:36px 40px; font-family:'Inter',sans-serif; max-height:640px; overflow-y:auto;}
+.report-doc h2{font-family:var(--font-display); font-size:19px; margin:22px 0 10px; color:#0c2118; border-bottom:2px solid #1c6b48; padding-bottom:6px;}
+.report-doc h2:first-child{margin-top:0;}
+.report-doc p{font-size:13px; line-height:1.7; margin-bottom:10px; color:#2b2b2b;}
+.report-doc table{margin:10px 0 16px;}
+.report-doc th{color:#555; border-bottom:1px solid #ccc;}
+.report-doc td{color:#222; border-bottom:1px solid #e0ded4;}
+.report-banner{background:#fff4dd; border:1px solid #e8c987; border-radius:6px; padding:10px 14px; font-size:11.5px; color:#7a5b12; margin-bottom:18px; font-weight:500;}
+
+/* checklist / step */
+.step-item{display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--coal-700);}
+.step-item:last-child{border-bottom:none;}
+.step-dot{width:22px; height:22px; border-radius:50%; background:var(--coal-700); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:11px; margin-top:1px;}
+.step-item.done .step-dot{background:var(--emerald); color:#06231a;}
+.step-item.active .step-dot{background:var(--amber); color:#1a1200; animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:0.5;}}
+
+/* svg chart helpers */
+.chart-svg{width:100%; height:auto; display:block;}
+.axis-label{font-size:9.5px; fill:var(--text-dim); font-family:var(--font-mono);}
+.legend-row{display:flex; gap:16px; flex-wrap:wrap; margin-top:10px;}
+.legend-item{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-mid);}
+.legend-swatch{width:9px; height:9px; border-radius:2px;}
+
+@media (max-width: 980px){
+  .app-grid{grid-template-columns:1fr;}
+  .sidebar{position:fixed; left:-236px; top:0; bottom:0; width:236px; z-index:100; transition:left .2s ease;}
+  .sidebar.open{left:0;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col, .three-col{grid-template-columns:1fr;}
+  .chat-wrap{grid-template-columns:1fr; height:auto;}
+}
+</style>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<link rel="stylesheet" href="premium.css" /></head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login-screen">
+  <svg class="login-strata" viewBox="0 0 1200 800" preserveAspectRatio="none">
+    <path d="M0,600 C300,560 500,650 800,600 C1000,565 1100,610 1200,590 L1200,800 L0,800 Z" fill="#0f3d2e" opacity="0.25"/>
+    <path d="M0,660 C250,630 550,690 850,650 C1000,630 1100,660 1200,650 L1200,800 L0,800 Z" fill="#134430" opacity="0.3"/>
+    <path d="M0,720 C300,700 600,740 900,710 C1050,695 1150,715 1200,710 L1200,800 L0,800 Z" fill="#1c6b48" opacity="0.2"/>
+    <g stroke="#26332c" stroke-width="1" opacity="0.5">
+      <path d="M0,150 Q300,100 600,150 T1200,150" fill="none"/>
+      <path d="M0,220 Q300,180 600,220 T1200,220" fill="none"/>
+      <path d="M0,290 Q300,250 600,290 T1200,290" fill="none"/>
+    </g>
+  </svg>
+  <div class="login-card">
+    <div class="login-eyebrow">SIH26023 · Smart Automation</div>
+    <div class="login-title">GeoMine Intelligence</div>
+    <div class="login-sub">AI-Powered Geological, Mining &amp; Reporting Platform for CMPDI / CIL subsidiaries.</div>
+    <div id="login-fields">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" value="officer.demo" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" value="••••••••" />
+      </div>
+      <button class="btn btn-primary" onclick="enterApp()">Sign In</button>
+      
+      <div style="display: flex; align-items: center; justify-content: center; margin: 24px 0 16px;">
+        <hr style="flex-grow: 1; border: none; border-top: 1px solid var(--line);" />
+        <span style="padding: 0 12px; color: rgba(255,255,255,0.4); font-size: 11px; font-weight: 500; font-family: var(--font-mono); letter-spacing: 1px;">OR</span>
+        <hr style="flex-grow: 1; border: none; border-top: 1px solid var(--line);" />
+      </div>
+      
+      <button class="btn btn-ghost" onclick="showMockGoogleLogin()" style="display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); color: rgba(255,255,255,0.9); width: 100%;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Continue with Google
+      </button>
+    </div>
+    
+    <div class="login-foot">PROTOTYPE BUILD · NOT AN OFFICIAL CMPDI/CIL SYSTEM · MOCK AI &amp; DATA</div>
+  </div>
+
+  <!-- MOCK GOOGLE LOGIN MODAL -->
+  <div id="mock-google-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:#fff; color:#202124; width:100%; max-width:448px; border-radius:8px; padding:36px 40px; box-sizing:border-box; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="display:flex; justify-content:center; margin-bottom:12px;">
+        <svg viewBox="0 0 48 48" width="48px" height="48px">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+      </div>
+      <h2 style="font-size:24px; font-weight:400; text-align:center; margin:0 0 8px;">Sign in</h2>
+      <p style="text-align:center; font-size:16px; margin:0 0 32px; font-weight:400;">to continue to GeoMine</p>
+      
+      <div id="mock-google-step1">
+        <input type="email" id="mock-google-email" placeholder="Email or phone" style="width:100%; padding:13px 15px; font-size:16px; border:1px solid #dadce0; border-radius:4px; margin-bottom:9px; box-sizing:border-box; outline:none;" onfocus="this.style.border='2px solid #1a73e8'; this.style.padding='12px 14px';" onblur="this.style.border='1px solid #dadce0'; this.style.padding='13px 15px';" />
+        <a href="#" style="color:#1a73e8; font-weight:500; font-size:14px; text-decoration:none; display:inline-block; margin-bottom:32px;">Forgot email?</a>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <a href="#" style="color:#1a73e8; font-weight:500; font-size:14px; text-decoration:none;">Create account</a>
+          <button id="btn-next-email" style="background:#1a73e8; color:#fff; border:none; border-radius:4px; padding:0 24px; height:36px; font-size:14px; font-weight:500; cursor:pointer;">Next</button>
+        </div>
+      </div>
+      
+      <div id="mock-google-step-pwd" style="display:none; text-align:left;">
+        <div style="border:1px solid #dadce0; border-radius:16px; display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; margin-bottom:24px; font-size:14px; width:100%;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#5f6368" style="margin-right:8px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+          <span id="display-email" style="font-weight:500; color:#3c4043;">demo@gmail.com</span>
+        </div>
+        <input type="password" id="mock-google-password" placeholder="Enter your password" style="width:100%; padding:13px 15px; font-size:16px; border:1px solid #dadce0; border-radius:4px; margin-bottom:9px; box-sizing:border-box; outline:none;" onfocus="this.style.border='2px solid #1a73e8'; this.style.padding='12px 14px';" onblur="this.style.border='1px solid #dadce0'; this.style.padding='13px 15px';" />
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:32px;">
+          <a href="#" style="color:#1a73e8; font-weight:500; font-size:14px; text-decoration:none;">Forgot password?</a>
+          <button id="btn-next-pwd" style="background:#1a73e8; color:#fff; border:none; border-radius:4px; padding:0 24px; height:36px; font-size:14px; font-weight:500; cursor:pointer;">Sign in</button>
+        </div>
+      </div>
+      
+      <div id="mock-google-step2" style="display:none; text-align:center;">
+        <div style="width:36px; height:36px; border:3px solid #f3f3f3; border-top:3px solid #1a73e8; border-radius:50%; animation:google-spin 1s linear infinite; margin:20px auto;"></div>
+        <p style="font-size:15px;">Signing in...</p>
+      </div>
+      
+      <button onclick="closeMockGoogleLogin()" style="position:absolute; top:12px; right:12px; background:none; border:none; font-size:20px; color:#5f6368; cursor:pointer;">&times;</button>
+    </div>
+  </div>
+  
+  <style>
+    @keyframes google-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app">
+  <div class="app-grid">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">GeoMine Intelligence</div>
+          <div class="brand-tag">CMPDI × CIL prototype</div>
+        </div>
+      </div>
+      <div class="nav" id="nav-list"></div>
+      <div class="sidebar-foot">v0.9.2-demo<br/>Mock AI layer active</div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+      <div class="topbar">
+        <div class="breadcrumb">GeoMine <span>/</span> <b id="crumb-current">Dashboard</b></div>
+        <div class="topbar-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input id="global-search" placeholder="Search documents, reports, mines, topics…" onkeydown="if(event.key==='Enter')globalSearch(this.value)"/>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-btn" onclick="showToast('3 pending validations','2 documents flagged for review, 1 report awaiting approval.','warn')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="dot"></span>
+          </button>
+          <div class="user-chip">
+            <div class="avatar">T6</div>
+            <div class="user-meta">
+              <div class="user-name">Techie6</div>
+              <div class="user-role">Geologist · CMPDI</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+<div id="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal" id="modal-box"></div></div>
+
+<script>
+/* ================================================================
+   GEOMINE INTELLIGENCE — DEMO APPLICATION LOGIC
+   Single-file, dependency-light SPA. No backend required.
+   ================================================================ */
+
+/* ---------- ICONS (lucide-style inline svg strings) ---------- */
+const ICONS = {
+  dashboard:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>`,
+  docs:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`,
+  report:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  cloud:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9z"/></svg>`,
+  ai:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2v1a2 2 0 1 1-4 0V4a2 2 0 0 1 2-2z"/><path d="M12 8v3M8 21h8M9 15h6a3 3 0 0 0 3-3V9H6v3a3 3 0 0 0 3 3z"/></svg>`,
+  check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>`,
+  analytics:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>`,
+  repo:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+  trace:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+  workflow:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M9 6h6a3 3 0 0 1 3 3v6"/></svg>`,
+  settings:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  upload:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  send:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+  file:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`,
+};
+
+/* ---------- MOCK DOMAIN DATA ---------- */
+const SUBSIDIARIES = ["SECL","WCL","CCL","MCL","ECL","BCCL","NCL","SECL-Korba"];
+const SEAMS = ["Seam II","Seam III","Seam IV","Seam V","Seam VI","Jhingurdah Seam","Kurasia Seam"];
+const MINES = [
+  {name:"Gevra OC", sub:"SECL", lat:22.33, lng:82.49, prod:18.2, status:"active"},
+  {name:"Kusmunda OC", sub:"SECL", lat:22.28, lng:82.55, prod:19.6, status:"active"},
+  {name:"Dipka OC", sub:"SECL", lat:22.30, lng:82.60, prod:16.4, status:"active"},
+  {name:"Jayant OC", sub:"NCL", lat:24.19, lng:82.68, prod:12.1, status:"active"},
+  {name:"Nigahi OC", sub:"NCL", lat:24.22, lng:82.72, prod:10.8, status:"warn"},
+  {name:"Talcher Coalfield", sub:"MCL", lat:20.95, lng:85.22, prod:14.3, status:"active"},
+  {name:"Bharatpur OC", sub:"MCL", lat:20.98, lng:85.18, prod:9.7, status:"active"},
+  {name:"Sonepur Bazari", sub:"ECL", lat:23.68, lng:87.05, prod:6.2, status:"warn"},
+  {name:"Kathara Group", sub:"CCL", lat:23.85, lng:85.60, prod:8.9, status:"active"},
+  {name:"Block II Moonidih", sub:"BCCL", lat:23.72, lng:86.30, prod:5.4, status:"active"},
+];
+const DOC_TYPES = ["Geological Exploration Report","Borehole Log","Drilling Report","Geophysical Survey","Production Statement","Annual Report","Monthly Report","Reserve Estimation Sheet","Environmental Compliance Report","Mining Plan"];
+const TOPICS = [
+  {name:"Exploration", freq:842, size:38}, {name:"Production", freq:1120, size:44},
+  {name:"Coal Quality", freq:610, size:30}, {name:"Boreholes", freq:530, size:27},
+  {name:"Drilling", freq:495, size:26}, {name:"Reserves", freq:780, size:34},
+  {name:"Resources", freq:715, size:32}, {name:"Mining Plan", freq:410, size:23},
+  {name:"Land Acquisition", freq:265, size:18}, {name:"Environmental Compliance", freq:390, size:22},
+  {name:"Safety", freq:340, size:20}, {name:"Infrastructure", freq:220, size:16},
+  {name:"Overburden", freq:305, size:19}, {name:"Stripping Ratio", freq:245, size:17},
+  {name:"Dispatch", freq:288, size:18}, {name:"Seam IV", freq:198, size:15}
+];
+
+function rnd(min,max){return Math.round((Math.random()*(max-min)+min)*10)/10;}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function pad(n){return n.toString().padStart(4,'0');}
+
+let DOCS = [];
+(function seedDocs(){
+  const saved = localStorage.getItem('geomine_docs');
+  if(saved) {
+    try {
+      DOCS = JSON.parse(saved);
+      return;
+    } catch(e) {}
+  }
+  let names = [
+    "Geological_Exploration_BlockA_2024.pdf","Borehole_Log_BH-118_Gevra.xlsx","Drilling_Report_Q3_Kusmunda.pdf",
+    "Geophysical_Survey_Talcher_2023.pdf","Production_Statement_Aug2026.xlsx","Annual_Report_2024-25_SECL.pdf",
+    "Monthly_Report_Jul2026_NCL.docx","Reserve_Estimation_SeamIV.xlsx","Environmental_Compliance_MCL.pdf",
+    "Mining_Plan_Dipka_Revision3.pdf","Borehole_Log_BH-204_Jayant.xlsx","Geological_Survey_Block_C.pdf",
+    "Production_Statement_Jul2026.xlsx","Drilling_Report_Nigahi_2026.pdf","Coal_Quality_Assay_Sonepur.xlsx",
+    "Annual_Report_2023-24_CCL.pdf","Exploration_Summary_BharatpurOC.pdf","Land_Acquisition_Status_ECL.docx",
+    "Reserve_Report_BCCL_Q2.pdf","Safety_Audit_Kathara_2026.pdf"
+  ];
+  let statuses = ["Completed","Validated","Needs Review","Extracted","Processing","Completed","Completed","Validated"];
+  names.forEach((n,i)=>{
+    let type = DOC_TYPES[i % DOC_TYPES.length];
+    let conf = rnd(78,99);
+    DOCS.push({
+      id:'DOC-'+pad(1000+i), name:n, type, source: n.endsWith('.pdf')?'Scanned PDF':n.endsWith('.xlsx')?'Excel Spreadsheet':'Digital Document',
+      sub: pick(SUBSIDIARIES), date:`${pick(['12','04','21','29','07','15'])} ${pick(['Jan','Mar','May','Jul','Aug','2026'])==='2026'?'Aug 2026':pick(['Jan 2026','Mar 2026','May 2026','Jul 2026'])}`,
+      status: pick(statuses), pages: Math.floor(rnd(4,120)), fields: Math.floor(rnd(8,42)), confidence: conf,
+      seam: pick(SEAMS), tags:[pick(TOPICS).name, pick(TOPICS).name]
+    });
+  });
+  localStorage.setItem('geomine_docs', JSON.stringify(DOCS));
+})();
+
+const VALIDATION_RULES = [
+  {rule:"Production total reconciliation", doc:"Annual_Report_2024-25_SECL.pdf", status:"pass", conf:99.1},
+  {rule:"Resource figure consistency", doc:"Geological_Exploration_BlockA_2024.pdf", status:"warn", conf:87.3},
+  {rule:"Missing exploration date field", doc:"Borehole_Log_BH-118_Gevra.xlsx", status:"error", conf:64.2},
+  {rule:"Year-on-year change within expected range", doc:"Production_Statement_Aug2026.xlsx", status:"pass", conf:97.8},
+  {rule:"Required fields present", doc:"Monthly_Report_Jul2026_NCL.docx", status:"pass", conf:95.0},
+  {rule:"Duplicate document detected", doc:"Reserve_Estimation_SeamIV.xlsx", status:"warn", conf:81.4},
+  {rule:"Conflicting values across sources", doc:"Drilling_Report_Nigahi_2026.pdf", status:"error", conf:58.9},
+  {rule:"Coal quality (GCV) within statutory band", doc:"Coal_Quality_Assay_Sonepur.xlsx", status:"pass", conf:96.6},
+  {rule:"Borehole count matches drilling log", doc:"Exploration_Summary_BharatpurOC.pdf", status:"pass", conf:93.2},
+  {rule:"Stripping ratio anomaly check", doc:"Mining_Plan_Dipka_Revision3.pdf", status:"warn", conf:84.0},
+];
+
+const PROD_TREND = [
+  {y:"2021-22", v:612}, {y:"2022-23", v:640}, {y:"2023-24", v:678}, {y:"2024-25", v:703}, {y:"2025-26", v:762}
+];
+const DOCS_TREND = [820,940,1010,1180,1340,1490,1620,1780,1950,2140,2380,2620];
+const MONTHS_SHORT = ["Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug"];
+
+/* ---------- NAV CONFIG ---------- */
+const NAV = [
+  {id:'dashboard', label:'Dashboard', icon:'dashboard'},
+  {id:'documents', label:'Document Intelligence', icon:'docs'},
+  {id:'reportgen', label:'Report Generator', icon:'report'},
+  {id:'topics', label:'Word Cloud & Topics', icon:'cloud'},
+  {id:'assistant', label:'AI Assistant', icon:'ai'},
+  {id:'validation', label:'Validation & QC', icon:'check'},
+  {id:'analytics', label:'Mining Analytics', icon:'analytics'},
+  {id:'repository', label:'Repository', icon:'repo'},
+  {id:'traceability', label:'Traceability', icon:'trace'},
+  {id:'workflow', label:'Workflow Monitoring', icon:'workflow'},
+];
+
+function buildSidebar(){
+  const nav = document.getElementById('nav-list');
+  nav.innerHTML = `<div class="nav-group-label">Platform</div>` + NAV.map(n=>`
+    <div class="nav-item ${n.id==='dashboard'?'active':''}" data-page="${n.id}" onclick="goPage('${n.id}')">
+      <span class="nav-icon">${ICONS[n.icon]}</span>${n.label}
+    </div>`).join('');
+}
+
+async function enterApp(){
+  document.getElementById('login-screen').style.display='none';
+  
+  document.getElementById('app').style.display='block';
+  
+  try {
+    const res = await fetch('http://localhost:3000/api/data');
+    const data = await res.json();
+    window.MINES = data.MINES;
+    window.DOCS = data.DOCS;
+    window.PROD_TREND = data.PROD_TREND;
+    window.DOCS_TREND = data.DOCS_TREND;
+    window.TOPICS = data.TOPICS;
+    window.SUBSIDIARIES = data.SUBSIDIARIES;
+    
+    // Connect socket
+    if(typeof io !== 'undefined') {
+      const socket = io('http://localhost:3000');
+      socket.on('kpi_update', (metrics) => {
+      const els = document.querySelectorAll('.kpi-value');
+      if(els.length >= 2){
+        els[0].innerText = metrics.totalProduction + ' MT';
+        els[1].innerText = metrics.docsProcessed;
+      }
+    });
+    }
+  } catch (err) {
+    console.warn("Backend not running, falling back to mock data", err);
+  }
+
+  buildSidebar();
+  goPage('dashboard');
+  showToast('Signed in','Demo session started as Techie6 (Geologist, CMPDI).','ok');
+}
+
+function goPage(id){
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active', el.dataset.page===id));
+  const label = NAV.find(n=>n.id===id)?.label || id;
+  document.getElementById('crumb-current').textContent = label;
+  document.getElementById('content').innerHTML = renderPage(id);
+  document.getElementById('content').scrollTop = 0;
+  afterRenderHooks(id);
+}
+
+/* ---------- TOASTS ---------- */
+function showToast(title, body, type='ok'){
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type==='warn'?' warn':type==='error'?' error':'');
+  el.innerHTML = `<div><div class="toast-title">${title}</div><div class="toast-body">${body}</div></div>`;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s ease'; setTimeout(()=>el.remove(),300); }, 4200);
+}
+
+/* ---------- MODAL ---------- */
+function openModal(title, bodyHtml){
+  document.getElementById('modal-box').innerHTML = `
+    <div class="modal-head"><div class="modal-title">${title}</div><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-body">${bodyHtml}</div>`;
+  document.getElementById('modal-backdrop').style.display='flex';
+}
+function closeModal(){ document.getElementById('modal-backdrop').style.display='none'; }
+
+function globalSearch(q){
+  if(!q) return;
+  goPage('repository');
+  setTimeout(()=>{ const f = document.getElementById('repo-search'); if(f){ f.value=q; filterRepo(); } },50);
+  showToast('Search', `Showing repository results for "${q}"`, 'ok');
+}
+
+/* ================================================================
+   SVG CHART HELPERS
+   ================================================================ */
+function svgLineChart(data, opts={}){
+  const w=opts.w||560, h=opts.h||220, pad=40;
+  const max = Math.max(...data)*1.15, min=Math.min(0,Math.min(...data));
+  const stepX = (w-pad*1.3)/(data.length-1);
+  const pts = data.map((v,i)=>{
+    const x = pad + i*stepX;
+    const y = h-pad - ((v-min)/(max-min))*(h-pad*1.6);
+    return [x,y];
+  });
+  const path = pts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const area = path + ` L${pts[pts.length-1][0]},${h-pad} L${pts[0][0]},${h-pad} Z`;
+  const gridY = [0,0.25,0.5,0.75,1].map(f=>h-pad-f*(h-pad*1.6));
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+    <defs><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${gridY.map(y=>`<line x1="${pad}" y1="${y}" x2="${w-10}" y2="${y}" stroke="#1d2620" stroke-width="1"/>`).join('')}
+    <path d="${area}" fill="url(#lg1)"/>
+    <path d="${path}" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.2" fill="#0e1210" stroke="#34d399" stroke-width="2"/>`).join('')}
+    ${opts.labels?opts.labels.map((l,i)=>`<text x="${pad+i*stepX}" y="${h-12}" text-anchor="middle" class="axis-label">${l}</text>`).join(''):''}
+  </svg>`;
+}
+
+function svgBarChart(data, labels, opts={}){
+  const w=opts.w||560, h=opts.h||220, pad=36;
+  const max = Math.max(...data)*1.15;
+  const bw = (w-pad*1.4)/data.length*0.6;
+  const gap = (w-pad*1.4)/data.length;
+  const colors = opts.colors || data.map(()=>'#1c6b48');
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+    <style>
+      .bar-wrapper .bar-segment {
+        transition: opacity 0.3s ease, filter 0.3s ease;
+        cursor: pointer;
+      }
+      .bar-wrapper:hover .bar-segment:not(:hover) {
+        opacity: 0.3;
+        filter: grayscale(50%);
+      }
+    </style>
+    ${[0,0.25,0.5,0.75,1].map(f=>`<line x1="${pad}" y1="${h-pad-f*(h-pad*1.5)}" x2="${w-10}" y2="${h-pad-f*(h-pad*1.5)}" stroke="#1d2620" stroke-width="1"/>`).join('')}
+    <g class="bar-wrapper">
+    ${data.map((v,i)=>{
+      const bh = (v/max)*(h-pad*1.5);
+      const x = pad + i*gap + (gap-bw)/2;
+      const y = h-pad-bh;
+      return `<rect class="bar-segment" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${colors[i]}" onmouseover="this.style.filter='drop-shadow(0 0 12px ${colors[i]})'" onmouseout="this.style.filter='none'"/>`;
+    }).join('')}
+    </g>
+    ${labels?labels.map((l,i)=>`<text x="${pad+i*gap+gap/2}" y="${h-12}" text-anchor="middle" class="axis-label">${l}</text>`).join(''):''}
+  </svg>`;
+}
+
+function svgDonut(segments, opts={}){
+  const size=opts.size||160, r=size/2-14, cx=size/2, cy=size/2, sw=18;
+  const total = segments.reduce((a,s)=>a+s.value,0);
+  let acc=0;
+  const circ = 2*Math.PI*r;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1d2620" stroke-width="${sw}"/>
+    <style>
+      .donut-wrapper .donut-segment {
+        transition: opacity 0.3s ease, filter 0.3s ease;
+        cursor: pointer;
+      }
+      .donut-wrapper:hover .donut-segment:not(:hover) {
+        opacity: 0.3;
+        filter: grayscale(50%);
+      }
+      .donut-inner-glow {
+        transition: fill 0.3s ease, opacity 0.3s ease;
+      }
+    </style>
+    <g class="donut-wrapper">
+      <circle class="donut-inner-glow" id="inner-glow" cx="${cx}" cy="${cy}" r="${r - sw/2}" fill="transparent" opacity="0"/>
+      ${segments.map((s, i)=>{
+        const frac = s.value/total;
+        const dash = frac*circ;
+        const el = `<circle class="donut-segment" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(1)} ${(circ-dash).toFixed(1)}" stroke-dashoffset="${(-acc).toFixed(1)}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt" onmouseover="document.getElementById('inner-glow').setAttribute('fill', '${s.color}'); document.getElementById('inner-glow').setAttribute('opacity', '0.25'); document.getElementById('inner-glow').style.filter='blur(8px)';" onmouseout="document.getElementById('inner-glow').setAttribute('opacity', '0');"/>`;
+        acc += dash;
+        return el;
+      }).join('')}
+    </g>
+    <text x="${cx}" y="${cy+5}" text-anchor="middle" font-family="Sora" font-weight="700" font-size="18" fill="#eef2ef">${total}</text>
+  </svg>`;
+}
+
+/* ================================================================
+   PAGE RENDERERS
+   ================================================================ */
+function renderPage(id){
+  switch(id){
+    case 'dashboard': return pageDashboard();
+    case 'documents': return pageDocuments();
+    case 'reportgen': return pageReportGen();
+    case 'topics': return pageTopics();
+    case 'assistant': return pageAssistant();
+    case 'validation': return pageValidation();
+    case 'analytics': return pageAnalytics();
+    case 'repository': return pageRepository();
+    case 'traceability': return pageTraceability();
+    case 'workflow': return pageWorkflow();
+    default: return pageDashboard();
+  }
+}
+
+/* ---------- DASHBOARD ---------- */
+function pageDashboard(){
+  const kpis = [
+    {label:'Documents Processed', value:'12,480', delta:'+6.2% this month', cls:'up'},
+    {label:'Reports Generated', value:'2,840', delta:'+3.8% this month', cls:'up'},
+    {label:'Extraction Accuracy', value:'96.8%', delta:'demo / estimated', cls:'warn'},
+    {label:'Automation Rate', value:'82%', delta:'+11pts vs manual baseline', cls:'up'},
+    {label:'Avg Report Time', value:'2.4 min', delta:'was 18 min manually', cls:'up'},
+    {label:'Validation Pass Rate', value:'97.2%', delta:'demo / estimated', cls:'warn'},
+  ];
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Executive Dashboard</div><div class="page-sub">Prototype-wide summary of document intelligence, automation and reporting activity across CIL subsidiaries.</div></div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-sm btn-outline" onclick="goPage('documents')">Upload documents</button>
+      <button class="btn btn-sm btn-solid-green" onclick="goPage('reportgen')">Generate report</button>
+    </div>
+  </div>
+
+  <div class="grid kpi-grid">
+    ${kpis.map(k=>`
+      <div class="card kpi-card">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-delta ${k.cls}">${k.cls==='up'?'▲':'●'} ${k.delta}</div>
+      </div>`).join('')}
+  </div>
+
+  <div class="grid two-col section-gap">
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Documents processed — last 12 months</div><div class="card-meta">demo data</div></div>
+      ${svgLineChart(DOCS_TREND, {labels:MONTHS_SHORT})}
+    </div>
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Pipeline status mix</div><div class="card-meta">12,480 docs</div></div>
+      <div style="display:flex; align-items:center; gap:22px;">
+        ${svgDonut([
+          {value:8420, color:'#34d399'}, {value:2140, color:'#1d3348'}, {value:1120, color:'#e8a83c'}, {value:800, color:'#e0685a'}
+        ])}
+        <div class="legend-row" style="flex-direction:column; gap:10px; margin-top:0;">
+          <div class="legend-item"><span class="legend-swatch" style="background:#34d399"></span>Completed (8,420)</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#1d3348"></span>Processing (2,140)</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#e8a83c"></span>Needs Review (1,120)</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#e0685a"></span>Failed / Error (800)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid two-col section-gap">
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Coal production trend — all subsidiaries (MT)</div><div class="card-meta">FY basis · demo</div></div>
+      ${svgBarChart(PROD_TREND.map(p=>p.v), PROD_TREND.map(p=>p.y), {colors:['#134430','#134430','#134430','#1c6b48','#34d399']})}
+    </div>
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Report preparation time</div><div class="card-meta">Prototype estimate</div></div>
+      <div style="display:flex; justify-content:space-around; align-items:flex-end; height:180px; padding:10px 0;">
+        <div style="text-align:center;">
+          <div style="width:60px; height:150px; background:linear-gradient(180deg,#26332c,#1d2620); border-radius:6px 6px 0 0; display:flex; align-items:flex-start; justify-content:center; padding-top:8px; font-family:var(--font-mono); font-size:11px; color:var(--text-mid);">18h</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">Manual</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="width:60px; height:26px; background:linear-gradient(180deg,var(--emerald),var(--emerald-dim)); border-radius:6px 6px 0 0; display:flex; align-items:flex-start; justify-content:center; padding-top:6px; font-family:var(--font-mono); font-size:11px; color:#06231a; font-weight:700;">2.5h</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">AI-assisted</div>
+        </div>
+      </div>
+      <div class="report-banner" style="margin-top:6px;">~86% potential reduction in prep time — prototype estimate, subject to field validation.</div>
+    </div>
+  </div>
+
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Documents → Insight pipeline</div><div class="card-meta">how GeoMine processes information</div></div>
+    <div class="pipeline-row">
+      ${['Documents','AI Ingestion','OCR + Parsing','Entity Extraction','Validation & QC','Reports / Analytics / AI Query'].map((s,i,arr)=>`
+        <div class="pipe-step done"><div class="pipe-dot">${i+1}</div><div class="pipe-label">${s}</div></div>
+        ${i<arr.length-1?'<div class="pipe-line done"></div>':''}
+      `).join('')}
+    </div>
+  </div>
+
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Recent activity</div><div class="card-meta">live demo feed</div></div>
+    <table>
+      <thead><tr><th>Event</th><th>Subsidiary</th><th>User</th><th>Time</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Report generated — Monthly Performance Report</td><td>SECL</td><td>Techie6</td><td>4 min ago</td><td><span class="badge badge-pass">Completed</span></td></tr>
+        <tr><td>Document uploaded — Borehole_Log_BH-204_Jayant.xlsx</td><td>NCL</td><td>A. Verma</td><td>22 min ago</td><td><span class="badge badge-info">Extracted</span></td></tr>
+        <tr><td>Validation flagged — Reserve figure mismatch</td><td>MCL</td><td>System</td><td>41 min ago</td><td><span class="badge badge-warn">Needs Review</span></td></tr>
+        <tr><td>AI query answered — Production trend FY19–24</td><td>CCL</td><td>K. Iyer</td><td>1 hr ago</td><td><span class="badge badge-pass">Completed</span></td></tr>
+        <tr><td>Report approved — Parliamentary Query Response</td><td>ECL</td><td>Supervisor</td><td>2 hr ago</td><td><span class="badge badge-pass">Approved</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  `;
+}
+
+/* ---------- DOCUMENTS ---------- */
+function pageDocuments(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Document Intelligence</div><div class="page-sub">Upload geological, mining and production documents for AI-assisted extraction, structuring and validation.</div></div>
+  </div>
+
+  <div class="card section-gap">
+    <div class="upload-zone" id="upload-zone" ondragover="event.preventDefault(); this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+      <div class="upload-icon">${ICONS.upload}</div>
+      <div class="upload-title">Drag &amp; drop documents here</div>
+      <div class="upload-sub">PDF, DOCX, XLSX, CSV, JPG, PNG — scanned or digital</div>
+      <input type="file" id="real-file-input" style="display:none" onchange="simulateRealUpload(event)" multiple />
+      <button class="btn btn-sm btn-solid-green" onclick="document.getElementById('real-file-input').click()">Browse Files</button>
+      <div class="filetypes">Select a real file from your computer to simulate processing</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">Uploaded documents</div>
+      <div class="card-meta">${DOCS.length} documents</div>
+    </div>
+    <table>
+      <thead><tr><th>File Name</th><th>Type</th><th>Source</th><th>Upload Date</th><th>Status</th><th>Pages</th><th>Fields</th><th>Confidence</th><th></th></tr></thead>
+      <tbody id="doc-table-body">
+        ${DOCS.map(d=>docRow(d)).join('')}
+      </tbody>
+    </table>
+  </div>
+  `;
+}
+function docRow(d){
+  const confCls = d.confidence>=93?'high':d.confidence>=80?'mid':'low';
+  return `<tr>
+    <td><span style="font-weight:500;">${d.name}</span><br/><span class="mono">${d.id}</span></td>
+    <td class="mono">${d.type}</td>
+    <td>${d.source}</td>
+    <td class="mono">${d.date}</td>
+    <td>${statusBadge(d.status)}</td>
+    <td class="mono">${d.pages}</td>
+    <td class="mono">${d.fields}</td>
+    <td class="confidence ${confCls}">${d.confidence}%</td>
+    <td><button class="link-btn" onclick="openDocDetail('${d.id}')">View →</button></td>
+  </tr>`;
+}
+function statusBadge(status){
+  const map = {
+    'Completed':'badge-pass','Validated':'badge-pass','Extracted':'badge-info',
+    'Processing':'badge-warn','Needs Review':'badge-warn','Uploaded':'badge-neutral','Error':'badge-error'
+  };
+  return `<span class="badge ${map[status]||'badge-neutral'}">${status}</span>`;
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  simulateUpload();
+}
+
+function simulateUpload(){
+  // fallback for drop
+  triggerMockUpload(pick(["Geological_Exploration_BlockE_2026.pdf","Borehole_Log_BH-312_Talcher.xlsx","Production_Statement_Aug2026_v2.xlsx","Drilling_Report_SeamVI_2026.pdf"]));
+}
+function simulateRealUpload(e){
+  const files = e.target.files;
+  if(files && files.length > 0){
+    triggerMockUpload(files[0].name);
+  }
+}
+function triggerMockUpload(filename){
+  const newDoc = {
+    id:'DOC-'+pad(1000+DOCS.length+Math.floor(Math.random()*900)),
+    name: filename,
+    type: pick(DOC_TYPES), source:'Scanned PDF', sub: pick(SUBSIDIARIES),
+    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), status:'Uploaded', pages: Math.floor(rnd(6,80)), fields:0, confidence:0, seam: pick(SEAMS), tags:[pick(TOPICS).name]
+  };
+  DOCS.unshift(newDoc);
+  localStorage.setItem('geomine_docs', JSON.stringify(DOCS));
+  document.getElementById('doc-table-body').insertAdjacentHTML('afterbegin', docRow(newDoc));
+  showToast('Upload received', `${newDoc.name} queued for AI processing.`, 'ok');
+  openModal('AI Document Processing — '+newDoc.name, buildPipelineModal(newDoc.id));
+  runPipelineAnimation(newDoc);
+}
+
+function buildPipelineModal(docId){
+  const steps = ['File received','OCR processing','Text extraction','Table extraction','Entity identification','Data normalization','Validation','Indexing'];
+  return `
+    <div style="font-size:12.5px; color:var(--text-mid); margin-bottom:14px;">Simulated AI pipeline — demo mode, no external API calls made.</div>
+    <div id="pipe-steps">
+      ${steps.map((s,i)=>`<div class="step-item" id="pstep-${i}"><div class="step-dot">${i+1}</div><div><div style="font-weight:500; font-size:13.5px;">${s}</div><div style="font-size:11.5px; color:var(--text-dim);" id="pstep-note-${i}">Pending…</div></div></div>`).join('')}
+    </div>
+    <div id="pipe-result" style="display:none; margin-top:18px;"></div>
+  `;
+}
+
+function runPipelineAnimation(doc){
+  const notes = ['Document received and queued (${doc.pages} pages)','Scanned pages rendered, OCR engine applied','Raw text extracted and cleaned','Tables and grid structures detected','Geological/mining entities tagged (seam, area, resource…)','Values normalized to standard units','Cross-checked against reporting rules','Added to searchable repository index'];
+  let i=0;
+  const interval = setInterval(()=>{
+    const el = document.getElementById('pstep-'+i);
+    if(el){
+      el.classList.add('done');
+      const noteEl = document.getElementById('pstep-note-'+i);
+      if(noteEl) noteEl.textContent = notes[i].replace('${doc.pages}', doc.pages);
+    }
+    i++;
+    if(i>=8){
+      clearInterval(interval);
+      finishPipeline(doc);
+    } else {
+      const nextEl = document.getElementById('pstep-'+i);
+      if(nextEl) nextEl.classList.add('active');
+    }
+  }, 480);
+  const first = document.getElementById('pstep-0'); if(first) first.classList.add('active');
+}
+
+function finishPipeline(doc){
+  doc.status='Extracted'; doc.confidence = Math.floor(rnd(89,98)); doc.fields = Math.floor(rnd(14,40));
+  const row = document.querySelector('#doc-table-body tr'); // first row (most recent)
+  const resultBox = document.getElementById('pipe-result');
+  if(resultBox){
+    resultBox.style.display='block';
+    resultBox.innerHTML = `
+      <div class="report-banner" style="background:rgba(52,211,153,0.1); border-color:rgba(52,211,153,0.3); color:var(--emerald);">Processing complete — ${doc.fields} fields extracted at ${doc.confidence}% average confidence.</div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn btn-sm btn-solid-green" onclick="closeModal(); openDocDetail('${doc.id}')">Review extracted data</button>
+        <button class="btn btn-sm btn-outline" onclick="closeModal()">Close</button>
+      </div>`;
+  }
+  refreshDocTable();
+  showToast('Extraction complete', `${doc.name} processed at ${doc.confidence}% confidence.`, 'ok');
+}
+
+function refreshDocTable(){
+  const body = document.getElementById('doc-table-body');
+  if(body) body.innerHTML = DOCS.map(d=>docRow(d)).join('');
+}
+
+function openDocDetail(id){
+  const d = DOCS.find(x=>x.id===id);
+  if(!d) return;
+  const fields = mockExtractedFields(d);
+  openModal(d.name, `
+    <div style="display:grid; grid-template-columns:1fr 1.1fr; gap:20px;">
+      <div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px; font-weight:600;">Document Preview</div>
+        <div style="background:var(--coal-900); border:1px solid var(--line); border-radius:8px; height:280px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:var(--text-dim);">
+          <div style="width:60px; height:78px; background:var(--coal-700); border-radius:4px; border:1px solid var(--line);"></div>
+          <div style="font-size:11px;">${d.pages}-page ${d.source.toLowerCase()}</div>
+        </div>
+        <div style="margin-top:12px; font-size:12px; color:var(--text-mid);">
+          <div><b style="color:var(--text-hi)">Type:</b> ${d.type}</div>
+          <div><b style="color:var(--text-hi)">Subsidiary:</b> ${d.sub||pick(SUBSIDIARIES)}</div>
+          <div><b style="color:var(--text-hi)">Uploaded:</b> ${d.date}</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px; font-weight:600;">AI Extracted Information</div>
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          ${fields.map(f=>`<div style="display:flex; justify-content:space-between; padding:8px 10px; background:var(--coal-800); border-radius:6px; border:1px solid var(--line);">
+            <span style="color:var(--text-mid); font-size:12.5px;">${f.k}</span><span style="font-weight:600; font-size:12.5px;">${f.v}</span>
+          </div>`).join('')}
+        </div>
+        <div style="margin-top:14px; display:flex; align-items:center; justify-content:space-between;">
+          <span class="confidence high">Overall confidence: ${d.confidence||94}%</span>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:16px;">
+          <button class="btn btn-sm btn-solid-green" onclick="approveDoc('${d.id}')">Approve</button>
+          <button class="btn btn-sm btn-outline" onclick="reviewDoc('${d.id}')">Flag for Review</button>
+        </div>
+      </div>
+    </div>
+  `);
+}
+function mockExtractedFields(d){
+  return [
+    {k:'Project', v: d.name.split('_')[1] ? d.name.split('_').slice(0,2).join(' ') : 'Block A Exploration'},
+    {k:'Coal Seam', v: d.seam || pick(SEAMS)},
+    {k:'Area (sq km)', v: rnd(60,220)},
+    {k:'Estimated Resource (MT)', v: rnd(80,320)},
+    {k:'Exploration Depth (m)', v: Math.floor(rnd(300,800))},
+    {k:'Boreholes', v: Math.floor(rnd(40,180))},
+    {k:'Drilling Completed', v: Math.floor(rnd(30,170))},
+    {k:'Coal Quality (GCV kcal/kg)', v: Math.floor(rnd(3800,5200))},
+  ];
+}
+function approveDoc(id){
+  const d = DOCS.find(x=>x.id===id); if(d){ d.status='Validated'; refreshDocTable(); }
+  closeModal(); showToast('Document approved', id+' marked as validated.', 'ok');
+}
+function reviewDoc(id){
+  const d = DOCS.find(x=>x.id===id); if(d){ d.status='Needs Review'; refreshDocTable(); }
+  closeModal(); showToast('Flagged for review', id+' sent to review queue.', 'warn');
+}
+
+/* ---------- REPORT GENERATOR ---------- */
+function pageReportGen(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Automated Report Generator</div><div class="page-sub">Compose structured geological and mining reports from processed documents, with full source traceability.</div></div>
+  </div>
+
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Report configuration</div></div>
+    <div class="filter-row">
+      <select class="select-f" id="rg-type">
+        <option>Geological Report</option><option>Mining Report</option><option>Production Report</option>
+        <option>Exploration Report</option><option>Monthly Performance Report</option><option>Annual Report</option>
+        <option>Parliamentary Query Response</option><option>Administrative Query Response</option><option>Custom Report</option>
+      </select>
+      <select class="select-f" id="rg-sub">${SUBSIDIARIES.map(s=>`<option>${s}</option>`).join('')}</select>
+      <select class="select-f" id="rg-mine">${MINES.map(m=>`<option>${m.name}</option>`).join('')}</select>
+      <select class="select-f" id="rg-period">
+        <option>Q1 FY 2026-27</option><option>Q2 FY 2026-27</option><option>FY 2025-26</option><option>Aug 2026</option>
+      </select>
+    </div>
+    <button class="btn btn-sm btn-solid-green" onclick="generateReport()">Generate AI Report</button>
+  </div>
+
+  <div class="card" id="report-output-card" style="display:none;">
+    <div id="report-gen-progress"></div>
+    <div id="report-final" style="display:none;"></div>
+  </div>
+
+  <div class="card" id="report-placeholder">
+    <div class="empty-state">
+      ${ICONS.report}
+      <div style="font-weight:600; color:var(--text-mid); margin-bottom:4px;">No report generated yet</div>
+      <div style="font-size:12.5px;">Configure the report above and click "Generate AI Report" to see a live simulated generation.</div>
+    </div>
+  </div>
+  `;
+}
+function generateReport(){
+  const type = document.getElementById('rg-type').value;
+  const sub = document.getElementById('rg-sub').value;
+  const mine = document.getElementById('rg-mine').value;
+  const period = document.getElementById('rg-period').value;
+  document.getElementById('report-placeholder').style.display='none';
+  const card = document.getElementById('report-output-card');
+  card.style.display='block';
+  document.getElementById('report-final').style.display='none';
+  const steps = ['Collecting data…','Analyzing documents…','Validating figures…','Comparing historical data…','Generating report…','Running quality checks…','Finalizing…'];
+  const progWrap = document.getElementById('report-gen-progress');
+  progWrap.style.display='block';
+  progWrap.innerHTML = `<div class="card-title" style="margin-bottom:14px;">Generating: ${type} — ${sub} / ${mine} / ${period}</div>` +
+    steps.map((s,i)=>`<div class="step-item" id="rgstep-${i}"><div class="step-dot">${i+1}</div><div style="font-size:13px;">${s}</div></div>`).join('');
+  let i=0;
+  const iv = setInterval(()=>{
+    const el = document.getElementById('rgstep-'+i);
+    if(el) el.classList.add('done','active');
+    i++;
+    if(i>=steps.length){
+      clearInterval(iv);
+      setTimeout(()=>renderFinalReport(type,sub,mine,period), 400);
+    }
+  }, 420);
+}
+function renderFinalReport(type,sub,mine,period){
+  document.getElementById('report-gen-progress').style.display='none';
+  const box = document.getElementById('report-final');
+  box.style.display='block';
+  const resource = rnd(120,340), boreholes = Math.floor(rnd(80,220)), gcv = Math.floor(rnd(4200,5100));
+  const prodThis = rnd(14,22), prodLast = prodThis - rnd(-1.5,2.2);
+  const change = (((prodThis-prodLast)/prodLast)*100).toFixed(1);
+  box.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="card-title">${type} — ${sub}</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-sm btn-navy" onclick="downloadCSV('report_data.csv', [['Category','Estimated Quantity (MT)','Confidence'],['Proved Reserve',${(resource*0.42).toFixed(1)},'96.2%'],['Indicated Resource',${(resource*0.35).toFixed(1)},'91.4%'],['Inferred Resource',${(resource*0.23).toFixed(1)},'84.7%']])">Export Real CSV</button>
+        <button class="btn btn-sm btn-outline" onclick="showToast('Editing enabled','Report opened in edit mode (demo).','ok')">Edit Report</button>
+        <button class="btn btn-sm btn-solid-green" onclick="showToast('Report approved','Sent for authorized sign-off.','ok')">Approve</button>
+      </div>
+    </div>
+    <div class="report-doc">
+      <div class="report-banner">AI-generated draft — requires authorized review before official submission. Figures shown are prototype/demo values.</div>
+      <h2>Executive Summary</h2>
+      <p>This ${type.toLowerCase()} summarizes geological and mining activity for <b>${mine}</b> (${sub}) covering ${period}. Data was compiled from ${Math.floor(rnd(6,18))} source documents processed through the GeoMine AI extraction and validation pipeline, achieving an average confidence of ${rnd(91,98)}%.</p>
+      <h2>Project Overview</h2>
+      <p>${mine} is an active opencast project under ${sub}, situated within the regional coalfield with ongoing exploration and production activity across ${pick(SEAMS)} and adjoining seams.</p>
+      <h2>Geological Information</h2>
+      <p>Exploration coverage spans an estimated area of ${rnd(60,220)} sq km, with drilling extending to depths of up to ${Math.floor(rnd(400,750))} m. A total of ${boreholes} boreholes have been logged, of which ${Math.floor(boreholes*0.86)} are complete.</p>
+      <h2>Resource / Reserve Data</h2>
+      <table><thead><tr><th>Category</th><th>Estimated Quantity (MT)</th><th>Confidence</th></tr></thead>
+      <tbody>
+        <tr><td>Proved Reserve</td><td>${(resource*0.42).toFixed(1)}</td><td>96.2%</td></tr>
+        <tr><td>Indicated Resource</td><td>${(resource*0.35).toFixed(1)}</td><td>91.4%</td></tr>
+        <tr><td>Inferred Resource</td><td>${(resource*0.23).toFixed(1)}</td><td>84.7%</td></tr>
+      </tbody></table>
+      <h2>Production Statistics</h2>
+      <p>Production for the current period stands at ${prodThis} MT, compared with ${prodLast.toFixed(1)} MT in the prior comparable period — a change of ${change>0?'+':''}${change}%. Coal quality assays report an average GCV of ${gcv} kcal/kg.</p>
+      <h2>Key Findings</h2>
+      <p>Extraction and validation surfaced no critical discrepancies in this dataset. ${Math.floor(rnd(1,4))} minor figures were flagged for manual confirmation (see Validation &amp; QC module).</p>
+      <h2>Recommendations</h2>
+      <p>Continue phased drilling per the current mining plan; reconcile flagged reserve figures against the latest geophysical survey before final Ministry submission.</p>
+      <h2>Data Sources &amp; Validation Status</h2>
+      <p>Sources: Geological Exploration Report, Borehole Logs, Production Statement, Annual Report. Overall validation pass rate for this report: ${rnd(93,99)}%.</p>
+    </div>
+  `;
+  showToast('Report generated', `${type} for ${sub} is ready for review.`, 'ok');
+}
+
+/* ---------- TOPICS / WORD CLOUD ---------- */
+function pageTopics(){
+  const maxFreq = Math.max(...TOPICS.map(t=>t.freq));
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Word Cloud &amp; Topic Intelligence</div><div class="page-sub">Automatically identified themes across the processed document corpus.</div></div>
+  </div>
+  <div class="filter-row">
+    <select class="select-f"><option>All Dates</option><option>Last 30 days</option><option>Last Quarter</option><option>FY 2025-26</option></select>
+    <select class="select-f"><option>All Subsidiaries</option>${SUBSIDIARIES.map(s=>`<option>${s}</option>`).join('')}</select>
+    <select class="select-f"><option>All Mines</option>${MINES.map(m=>`<option>${m.name}</option>`).join('')}</select>
+    <select class="select-f"><option>All Document Types</option>${DOC_TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
+  </div>
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Topic word cloud</div><div class="card-meta">click a topic to view related documents</div></div>
+    <div class="wordcloud">
+      ${TOPICS.map(t=>`<span class="wc-word" style="font-size:${t.size}px; color:${pick(['#34d399','#8fb4d6','#e8a83c','#eef2ef','#1c6b48'])};" onclick="showTopicDocs('${t.name}')">${t.name}</span>`).join('')}
+    </div>
+  </div>
+  <div class="grid two-col">
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Top topics by frequency</div></div>
+      <table><thead><tr><th>Topic</th><th>Mentions</th><th></th></tr></thead>
+      <tbody>
+      ${TOPICS.slice().sort((a,b)=>b.freq-a.freq).slice(0,8).map(t=>`
+        <tr><td>${t.name}</td><td class="mono">${t.freq}</td>
+        <td style="width:120px;"><div class="progress-track"><div class="progress-fill" style="width:${(t.freq/maxFreq*100).toFixed(0)}%"></div></div></td></tr>
+      `).join('')}
+      </tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Topic trend — "Production"</div><div class="card-meta">mentions / month</div></div>
+      ${svgLineChart([62,68,74,71,80,88,92,97,101,108,114,120], {labels:MONTHS_SHORT})}
+    </div>
+  </div>
+  <div class="card section-gap" id="topic-docs-panel" style="display:none;"></div>
+  `;
+}
+function showTopicDocs(topic){
+  const related = DOCS.filter(d=>d.tags?.includes(topic)).slice(0,6);
+  const fallback = related.length ? related : DOCS.slice(0,4);
+  const panel = document.getElementById('topic-docs-panel');
+  panel.style.display='block';
+  panel.innerHTML = `<div class="card-title-row"><div class="card-title">Documents mentioning "${topic}"</div><div class="card-meta">${fallback.length} shown</div></div>
+    <div class="doc-cards">
+      ${fallback.map(d=>`<div class="doc-card" onclick="openDocDetail('${d.id}')">
+        <div class="doc-card-icon">${d.name.split('.').pop().toUpperCase()}</div>
+        <div class="doc-card-name">${d.name}</div>
+        <div class="doc-card-meta">${d.type} · ${d.date}</div>
+        <div class="doc-tags"><span class="tag">${topic}</span></div>
+      </div>`).join('')}
+    </div>`;
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* ---------- AI ASSISTANT ---------- */
+const SUGGESTED_Q = [
+  "What was the production trend of CIL subsidiaries over the last 5 years?",
+  "Show mines with declining production.",
+  "Which geological reports mention Seam IV?",
+  "Summarize exploration activity in Block A.",
+  "What are the major deviations from planned production?",
+  "Find all reports related to Gevra OC.",
+  "Generate a summary for the Ministry of Coal.",
+  "What are the major findings from historical reports?"
+];
+function pageAssistant(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Geological &amp; Mining Intelligence Assistant</div><div class="page-sub">Ask questions across reports, historical archives and operational datasets.</div></div>
+  </div>
+  <div class="chat-wrap">
+    <div>
+      <div class="card-title" style="margin-bottom:10px; font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">Suggested questions</div>
+      <div class="chat-suggested">
+        ${SUGGESTED_Q.map(q=>`<button class="suggested-q" onclick="handleSuggestionClick(${JSON.stringify(q).replace(/"/g, '&quot;')})" ondblclick="handleSuggestionDblClick(${JSON.stringify(q).replace(/"/g, '&quot;')})" title="Single-click to send, Double-click to edit">${q}</button>`).join('')}
+      </div>
+    </div>
+    <div class="chat-panel">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg ai">Hello, I'm the GeoMine Intelligence Assistant. Ask me anything about geological, mining or production data across your document archive — I'll answer with sources and confidence.</div>
+      </div>
+      <div class="chat-input-row" style="position:relative;">
+        <button class="icon-btn" onclick="startVoiceRecognition()" id="mic-btn" style="border:none; color:var(--emerald); background:transparent; display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:50%; transition:all 0.3s;" title="Speak English">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+        </button>
+        <input id="chat-input" placeholder="Type or speak a question..." onkeydown="if(event.key==='Enter')sendChat()" style="flex:1; padding-left:12px;"/>
+        <button class="btn btn-sm btn-solid-green" onclick="sendChat()">Send</button>
+        <div id="mic-status" style="position:absolute; top:-24px; left:10px; font-size:11px; color:var(--emerald); display:none; font-family:var(--font-mono); font-weight:600; text-shadow:0 0 5px var(--emerald);">● LISTENING...</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+let suggClickTimer = null;
+function handleSuggestionClick(q) {
+  if (suggClickTimer === null) {
+    suggClickTimer = setTimeout(() => {
+      suggClickTimer = null;
+      askAssistant(q);
+    }, 250);
+  }
+}
+function handleSuggestionDblClick(q) {
+  if (suggClickTimer !== null) {
+    clearTimeout(suggClickTimer);
+    suggClickTimer = null;
+  }
+  document.getElementById('chat-input').value = q;
+}
+
+window.utterances = [];
+function speakText(text, isFemale = false) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      if (isFemale) {
+        let v = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Samantha')));
+        if(v) u.voice = v;
+      } else {
+        let v = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Male') || v.name.includes('David') || v.name.includes('Guy')));
+        if(v) u.voice = v;
+      }
+    }
+    window.utterances.push(u); // prevent garbage collection
+    window.speechSynthesis.speak(u);
+  } catch(e) {
+    console.error("TTS Error:", e);
+  }
+}
+function sendChat(){
+  const input = document.getElementById('chat-input');
+  const val = input.value.trim();
+  if(!val) return;
+  
+  askAssistant(val);
+  input.value='';
+}
+async function askAssistant(q){
+  const wrap = document.getElementById('chat-messages');
+  wrap.insertAdjacentHTML('beforeend', `<div class="msg user">${q}</div>`);
+  wrap.scrollTop = wrap.scrollHeight;
+  const typingId = 'typing-'+Date.now();
+  wrap.insertAdjacentHTML('beforeend', `<div class="msg ai" id="${typingId}">Analyzing documents…</div>`);
+  wrap.scrollTop = wrap.scrollHeight;
+  
+  try {
+    const response = await fetch('http://localhost:3000/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q })
+    });
+    const resp = await response.json();
+    
+    const el = document.getElementById(typingId);
+    if(el){
+      el.innerHTML = `${resp.text}
+        <div class="msg-meta-row">
+          <span class="badge badge-info">Confidence: ${resp.conf}%</span>
+          <span class="badge badge-neutral">Sources: ${resp.sources.length}</span>
+          ${resp.entities.map(e=>`<span class="chip">${e}</span>`).join('')}
+        </div>
+        ${resp.sources.map(s=>`<div class="source-card"><div class="source-card-head"><div class="source-card-title">${s.doc}</div><button class="link-btn" onclick="viewSource('${s.doc}','${s.page}')">View Source</button></div><div style="font-size:11px; color:var(--text-dim);">Page ${s.page} · ${s.sub}</div></div>`).join('')}
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-sm btn-outline" onclick="goPage('reportgen')">Generate Report</button>
+          <button class="btn btn-sm btn-outline" onclick="downloadCSV('ai_answer.csv', [['Question','Answer'], [q, resp.text.replace(/\\n/g, ' ')]])">Export Real CSV</button>
+        </div>`;
+        
+      // AI Speech Synthesis
+      speakText(resp.text, false);
+    }
+  } catch (err) {
+    const el = document.getElementById(typingId);
+    const errMsg = "Sorry, failed to reach the AI backend service. Is the server running?";
+    if(el) el.innerHTML = errMsg;
+    speakText(errMsg, false);
+  }
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+// Voice Recognition Input (English Only)
+function startVoiceRecognition() {
+  if('speechSynthesis' in window) {
+    // Unlock TTS engine on user click
+    const unlock = new SpeechSynthesisUtterance('');
+    unlock.volume = 0;
+    window.speechSynthesis.speak(unlock);
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return showToast('Error', 'Voice recognition not supported in this browser. Use Chrome/Edge.', 'error');
+  
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  
+  const micBtn = document.getElementById('mic-btn');
+  const micStatus = document.getElementById('mic-status');
+  
+  micBtn.style.background = 'rgba(52,211,153,0.2)';
+  micBtn.style.boxShadow = '0 0 15px rgba(52,211,153,0.5)';
+  micBtn.style.animation = 'pulse 1.5s infinite';
+  micStatus.innerText = "● LISTENING...";
+  micStatus.style.display = 'block';
+  
+  recognition.onresult = function(event) {
+    const text = event.results[0][0].transcript;
+    document.getElementById('chat-input').value = text;
+    sendChat();
+    stopMicVisuals();
+  };
+  
+  recognition.onend = function() {
+    stopMicVisuals();
+  };
+  
+  recognition.onerror = function() {
+    showToast('Voice Input Failed', 'Could not hear anything. Try again.', 'warn');
+    stopMicVisuals();
+  };
+  
+  recognition.start();
+  
+  function stopMicVisuals() {
+    micBtn.style.background = 'transparent';
+    micBtn.style.boxShadow = 'none';
+    micBtn.style.animation = 'none';
+    micStatus.style.display = 'none';
+  }
+}
+
+// Real CSV Download Export
+function downloadCSV(filename, rows) {
+  const csvContent = rows.map(e => e.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(",")).join("\\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('Export complete', 'Real CSV file has been downloaded.', 'ok');
+}
+function viewSource(doc, page){
+  openModal('Source Evidence', `
+    <div class="source-card">
+      <div class="source-card-title">${doc}</div>
+      <div style="font-size:12px; color:var(--text-mid); margin-top:6px;">Referenced page: <b style="color:var(--text-hi)">${page}</b></div>
+      <div style="margin-top:12px; background:var(--coal-900); border:1px solid var(--line); border-radius:8px; height:160px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:12px;">Simulated document page preview</div>
+    </div>
+    <button class="btn btn-sm btn-outline" style="margin-top:14px;" onclick="closeModal(); goPage('traceability');">Open full traceability chain →</button>
+  `);
+}
+
+/* ---------- VALIDATION ---------- */
+function pageValidation(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Validation &amp; Quality Control</div><div class="page-sub">Extracted data checked against geological, statutory and historical reporting standards.</div></div>
+  </div>
+  <div class="grid three-col section-gap">
+    <div class="card"><div class="kpi-label">Rules passing</div><div class="kpi-value" style="color:var(--emerald)">${VALIDATION_RULES.filter(r=>r.status==='pass').length}</div></div>
+    <div class="card"><div class="kpi-label">Warnings</div><div class="kpi-value" style="color:var(--amber)">${VALIDATION_RULES.filter(r=>r.status==='warn').length}</div></div>
+    <div class="card"><div class="kpi-label">Errors</div><div class="kpi-value" style="color:var(--red)">${VALIDATION_RULES.filter(r=>r.status==='error').length}</div></div>
+  </div>
+  <div class="card">
+    <div class="filter-row">
+      <select class="select-f" id="val-filter" onchange="filterValidation()">
+        <option value="all">All statuses</option><option value="pass">Pass only</option><option value="warn">Warnings only</option><option value="error">Errors only</option>
+      </select>
+    </div>
+    <table>
+      <thead><tr><th>Rule</th><th>Status</th><th>Source Document</th><th>Confidence</th><th>Action</th></tr></thead>
+      <tbody id="val-table-body">${VALIDATION_RULES.map(valRow).join('')}</tbody>
+    </table>
+  </div>
+  `;
+}
+function valRow(r){
+  const badgeCls = r.status==='pass'?'badge-pass':r.status==='warn'?'badge-warn':'badge-error';
+  const label = r.status==='pass'?'PASS':r.status==='warn'?'WARNING':'ERROR';
+  const confCls = r.conf>=93?'high':r.conf>=80?'mid':'low';
+  const actionLabel = r.status==='pass'?'View':r.status==='warn'?'Review':'Fix';
+  return `<tr data-status="${r.status}"><td>${r.rule}</td><td><span class="badge ${badgeCls}">${label}</span></td><td class="mono">${r.doc}</td><td class="confidence ${confCls}">${r.conf}%</td>
+    <td><button class="link-btn" onclick="showToast('${actionLabel}', 'Opening ${r.rule.toLowerCase()} details (demo).','ok')">${actionLabel} →</button></td></tr>`;
+}
+function filterValidation(){
+  const val = document.getElementById('val-filter').value;
+  document.querySelectorAll('#val-table-body tr').forEach(tr=>{
+    tr.style.display = (val==='all' || tr.dataset.status===val) ? '' : 'none';
+  });
+}
+
+/* ---------- ANALYTICS ---------- */
+function pageAnalytics(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Geological &amp; Mining Analytics</div><div class="page-sub">Production, resource and exploration analytics across active projects.</div></div>
+  </div>
+  <div class="grid two-col section-gap">
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Planned vs actual production (MT)</div></div>
+      ${svgBarChart([9.2,10.1,9.8,10.6,11.0,10.4,11.3,11.8,12.0,11.6,12.4,12.9], MONTHS_SHORT, {colors:MONTHS_SHORT.map(()=>'#134430')})}
+      <div class="legend-row"><div class="legend-item"><span class="legend-swatch" style="background:#134430"></span>Actual production</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title-row"><div class="card-title">Resource distribution by category</div></div>
+      <div style="display:flex; align-items:center; gap:22px;">
+        ${svgDonut([{value:42,color:'#34d399'},{value:35,color:'#1d3348'},{value:23,color:'#e8a83c'}])}
+        <div class="legend-row" style="flex-direction:column; gap:10px; margin-top:0;">
+          <div class="legend-item"><span class="legend-swatch" style="background:#34d399"></span>Proved (42%)</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#1d3348"></span>Indicated (35%)</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#e8a83c"></span>Inferred (23%)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">3D Site Risk Matrix</div><div class="card-meta">Drag to rotate · Scroll to zoom</div></div>
+    <div id="plotly-3d-graph" style="height:360px; width:100%; border:1px solid var(--line); border-radius:10px; background:linear-gradient(135deg,#060907,#0a0f0d);"></div>
+  </div>
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Subsidiary comparison — production (MT, current FY)</div></div>
+    ${svgBarChart(MINES.slice(0,8).map(m=>m.prod), MINES.slice(0,8).map(m=>m.sub), {colors:MINES.slice(0,8).map(m=>m.status==='warn'?'#e8a83c':'#1c6b48')})}
+  </div>
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Mine locations</div><div class="card-meta">simulated GIS overlay — click a marker</div></div>
+    <div class="mine-map" id="mine-map">
+      ${MINES.map((m,i)=>{
+        const x = 8 + (i*11 + (i%3)*6) % 88;
+        const y = 15 + ((i*23) % 70);
+        return `<div class="map-marker ${m.status==='warn'?'warn':''}" style="left:${x}%; top:${y}%;" onmouseenter="showMapTip(event,${i})" onmouseleave="hideMapTip()" onclick="openMineDetail(${i})"></div>`;
+      }).join('')}
+      <div class="map-tooltip" id="map-tip"></div>
+      <svg style="position:absolute; inset:0; z-index:0; opacity:0.25;" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M0,60 Q25,50 50,60 T100,55" stroke="#26332c" fill="none" stroke-width="0.4"/>
+        <path d="M0,70 Q25,62 50,70 T100,66" stroke="#26332c" fill="none" stroke-width="0.4"/>
+        <path d="M0,80 Q25,74 50,80 T100,77" stroke="#26332c" fill="none" stroke-width="0.4"/>
+      </svg>
+    </div>
+    <div class="legend-row">
+      <div class="legend-item"><span class="legend-swatch" style="background:#34d399; border-radius:50%;"></span>On target</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#e8a83c; border-radius:50%;"></span>Attention needed</div>
+    </div>
+  `;
+}
+function showMapTip(e,i){
+  const m = MINES[i];
+  const tip = document.getElementById('map-tip');
+  tip.style.display='block';
+  tip.style.left = (e.target.offsetLeft+16)+'px';
+  tip.style.top = (e.target.offsetTop-6)+'px';
+  tip.innerHTML = `<b>${m.name}</b><br/>${m.sub} · ${m.prod} MT<br/><span style="color:${m.status==='warn'?'#e8a83c':'#34d399'}">${m.status==='warn'?'Attention needed':'On target'}</span>`;
+}
+function hideMapTip(){ document.getElementById('map-tip').style.display='none'; }
+function openMineDetail(i){
+  const m = MINES[i];
+  openModal(m.name + ' — 3D Digital Twin', `
+    <div style="display:flex; gap:20px;">
+      <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+        <div class="source-card"><b>Subsidiary:</b> ${m.sub}</div>
+        <div class="source-card"><b>Current Production:</b> ${m.prod} MT</div>
+        <div class="source-card"><b>Status:</b> <span style="color:${m.status==='warn'?'#e8a83c':'#34d399'}">${m.status==='warn'?'Attention needed — below plan':'On target'}</span></div>
+        <div class="source-card"><b>Coordinates:</b> ${m.lat}° N, ${m.lng}° E</div>
+        <div class="source-card"><b>Last update:</b> Live Telemetry Active</div>
+        
+        <div style="margin-top:auto; background:var(--coal-800); border:1px solid var(--emerald-dim); border-radius:8px; padding:10px; display:flex; gap:12px; align-items:center;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://sketchfab.com/models/b35e2ba643b9467683d7eb3d3eeb1fa5/embed?autostart=1&color=34d399&bgcolor=0a0d0c" style="width:64px; height:64px; border-radius:4px;" alt="AR QR Code">
+          <div>
+            <div style="color:var(--emerald); font-weight:600; font-size:12px; margin-bottom:2px;">View in AR (Mobile)</div>
+            <div style="color:var(--text-dim); font-size:11px;">Judges: Scan this QR code with your phone to view this 3D Digital Twin in Augmented Reality!</div>
+          </div>
+        </div>
+        
+        <button class="btn btn-sm btn-solid-green" style="margin-top:10px;" onclick="closeModal(); goPage('reportgen');">Generate report for this mine</button>
+      </div>
+      <div style="flex:1.5; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:#000;">
+        <div style="padding:6px 10px; background:var(--coal-800); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); border-bottom:1px solid var(--line);">3D Terrain / Equipment Model</div>
+        <iframe title="3D Mine Model" frameborder="0" allowfullscreen mozallowfullscreen="true" webkitallowfullscreen="true" allow="autoplay; fullscreen; xr-spatial-tracking" xr-spatial-tracking execution-while-out-of-viewport execution-while-not-rendered web-share src="https://sketchfab.com/models/b35e2ba643b9467683d7eb3d3eeb1fa5/embed?autostart=1&ui_theme=dark&dnt=1" style="width:100%; height:260px;"> </iframe>
+      </div>
+    </div>
+  `);
+}
+
+/* ---------- REPOSITORY ---------- */
+function pageRepository(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Document Repository</div><div class="page-sub">Search and filter the full archive of processed geological and mining documents.</div></div>
+  </div>
+  <div class="filter-row">
+    <input class="search-f" id="repo-search" placeholder="Search documents…" oninput="filterRepo()" style="flex:1; min-width:220px;"/>
+    <select class="select-f" id="repo-type" onchange="filterRepo()"><option value="">All types</option>${DOC_TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
+    <select class="select-f" id="repo-status" onchange="filterRepo()"><option value="">All statuses</option><option>Completed</option><option>Validated</option><option>Needs Review</option><option>Extracted</option><option>Processing</option><option>Uploaded</option></select>
+  </div>
+  <div class="doc-cards" id="repo-cards">
+    ${DOCS.map(repoCard).join('')}
+  </div>
+  `;
+}
+function repoCard(d){
+  const confCls = d.confidence>=93?'high':d.confidence>=80?'mid':'low';
+  return `<div class="doc-card" onclick="openDocDetail('${d.id}')" data-name="${d.name.toLowerCase()}" data-type="${d.type}" data-status="${d.status}">
+    <div class="doc-card-icon">${d.name.split('.').pop().toUpperCase()}</div>
+    <div class="doc-card-name">${d.name}</div>
+    <div class="doc-card-meta">${d.type} · ${d.date}</div>
+    <div class="doc-tags">
+      <span class="tag">${d.status}</span>
+      <span class="tag confidence ${confCls}" style="background:transparent; padding:0;">${d.confidence||'—'}%</span>
+    </div>
+  </div>`;
+}
+function filterRepo(){
+  const q = (document.getElementById('repo-search').value||'').toLowerCase();
+  const type = document.getElementById('repo-type').value;
+  const status = document.getElementById('repo-status').value;
+  document.querySelectorAll('#repo-cards .doc-card').forEach(c=>{
+    const matchQ = !q || c.dataset.name.includes(q);
+    const matchType = !type || c.dataset.type===type;
+    const matchStatus = !status || c.dataset.status===status;
+    c.style.display = (matchQ && matchType && matchStatus) ? '' : 'none';
+  });
+}
+
+/* ---------- TRACEABILITY ---------- */
+function pageTraceability(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">Traceability</div><div class="page-sub">Every AI-generated statement can be traced back to its original source, page and dataset cell.</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title-row"><div class="card-title">Example trace — Production statement</div><div class="card-meta">explainable AI chain</div></div>
+    <div class="trace-chain">
+      <div class="trace-node">
+        <div class="trace-marker">1</div>
+        <div class="trace-content">
+          <div class="trace-label">Generated Statement</div>
+          <div class="trace-value">"Production increased by 8.4% compared with the previous financial year."</div>
+        </div>
+      </div>
+      <div class="trace-node">
+        <div class="trace-marker">2</div>
+        <div class="trace-content">
+          <div class="trace-label">Extracted Data</div>
+          <div class="trace-value">FY2025-26 production: 762 MT · FY2024-25 production: 703 MT</div>
+          <div class="trace-detail">extracted field: total_production_mt</div>
+        </div>
+      </div>
+      <div class="trace-node">
+        <div class="trace-marker">3</div>
+        <div class="trace-content">
+          <div class="trace-label">Source Document</div>
+          <div class="trace-value">Annual_Report_2024-25_SECL.pdf</div>
+          <div class="trace-detail">Document ID: DOC-1005</div>
+        </div>
+      </div>
+      <div class="trace-node">
+        <div class="trace-marker">4</div>
+        <div class="trace-content">
+          <div class="trace-label">Page / Section</div>
+          <div class="trace-value">Page 42 — "Production Performance" table</div>
+        </div>
+      </div>
+      <div class="trace-node">
+        <div class="trace-marker">5</div>
+        <div class="trace-content">
+          <div class="trace-label">Original Evidence</div>
+          <div class="trace-value">Production_2024_25.xlsx</div>
+          <div class="trace-detail">Cell B17 · validated 27 Aug 2026 · confidence 98.1%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card section-gap">
+    <div class="card-title-row"><div class="card-title">Trace another statement</div></div>
+    <div class="filter-row">
+      <select class="select-f" id="trace-select" style="min-width:320px;">
+        <option>"Estimated resource for Seam IV is 184.6 MT."</option>
+        <option>"Nigahi OC shows declining production this quarter."</option>
+        <option>"97.2% of documents pass validation without manual correction."</option>
+      </select>
+      <button class="btn btn-sm btn-solid-green" onclick="traceCustom()">Trace</button>
+    </div>
+    <div id="trace-custom-result"></div>
+  </div>
+  `;
+}
+function traceCustom(){
+  const stmt = document.getElementById('trace-select').value;
+  const box = document.getElementById('trace-custom-result');
+  box.innerHTML = `
+    <div class="trace-chain" style="margin-top:16px;">
+      <div class="trace-node"><div class="trace-marker">1</div><div class="trace-content"><div class="trace-label">Statement</div><div class="trace-value">${stmt}</div></div></div>
+      <div class="trace-node"><div class="trace-marker">2</div><div class="trace-content"><div class="trace-label">Source Document</div><div class="trace-value">${pick(DOCS).name}</div></div></div>
+      <div class="trace-node"><div class="trace-marker">3</div><div class="trace-content"><div class="trace-label">Page / Cell</div><div class="trace-value">Page ${Math.floor(rnd(5,60))} · Cell ${pick(['B12','C7','D19','A24'])}</div><div class="trace-detail">confidence ${rnd(89,99)}%</div></div></div>
+    </div>`;
+}
+
+/* ---------- WORKFLOW MONITORING ---------- */
+function pageWorkflow(){
+  return `
+  <div class="page-head">
+    <div><div class="page-title">System &amp; Workflow Monitoring</div><div class="page-sub">Live status of document processing, report generation and validation jobs.</div></div>
+  </div>
+  <div class="grid kpi-grid" style="grid-template-columns:repeat(5,1fr);">
+    <div class="card kpi-card"><div class="kpi-label">Docs in queue</div><div class="kpi-value">18</div></div>
+    <div class="card kpi-card"><div class="kpi-label">Reports queued</div><div class="kpi-value">4</div></div>
+    <div class="card kpi-card"><div class="kpi-label">AI jobs running</div><div class="kpi-value">7</div></div>
+    <div class="card kpi-card"><div class="kpi-label">Failed jobs (24h)</div><div class="kpi-value" style="color:var(--red)">3</div></div>
+    <div class="card kpi-card"><div class="kpi-label">Avg processing time</div><div class="kpi-value">42s</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title-row"><div class="card-title">Active jobs</div></div>
+    <table>
+      <thead><tr><th>Job ID</th><th>Type</th><th>Subsidiary</th><th>Progress</th><th>Status</th></tr></thead>
+      <tbody>
+        ${['Document extraction','Report generation','Validation sweep','Entity re-indexing','Table extraction','Topic modeling'].map((t,i)=>{
+          const pct = Math.floor(rnd(15,98));
+          const status = pct>90?'Completed':pct>40?'Running':'Queued';
+          const badge = status==='Completed'?'badge-pass':status==='Running'?'badge-info':'badge-neutral';
+          return `<tr><td class="mono">JOB-${8801+i}</td><td>${t}</td><td>${pick(SUBSIDIARIES)}</td>
+          <td style="width:160px;"><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div></td>
+          <td><span class="badge ${badge}">${status}</span></td></tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  `;
+}
+
+/* ---------- AFTER RENDER HOOKS ---------- */
+let globalMap = null;
+function afterRenderHooks(id){
+  if(id === 'analytics'){
+    // Render Plotly 3D Graph
+    if(window.Plotly && document.getElementById('plotly-3d-graph')) {
+      const okMines = MINES.filter(m=>m.status !== 'warn');
+      const warnMines = MINES.filter(m=>m.status === 'warn');
+      
+      const trace1 = {
+        x: okMines.map(m=>m.prod),
+        y: okMines.map(m=>Math.floor(Math.random()*20 + 80)),
+        z: okMines.map(m=>Math.floor(Math.random()*15 + 5)),
+        text: okMines.map(m=>m.name),
+        mode: 'markers',
+        marker: { size: 8, color: '#34d399', line:{width:1, color:'#1c6b48'} },
+        name: 'On target',
+        type: 'scatter3d',
+        hoverinfo: 'text+name'
+      };
+      
+      const trace2 = {
+        x: warnMines.map(m=>m.prod),
+        y: warnMines.map(m=>Math.floor(Math.random()*40 + 40)),
+        z: warnMines.map(m=>Math.floor(Math.random()*40 + 60)),
+        text: warnMines.map(m=>m.name),
+        mode: 'markers',
+        marker: { size: 14, color: '#e8a83c', symbol: 'diamond', line:{width:2, color:'#d97706'} },
+        name: 'Action needed',
+        type: 'scatter3d',
+        hoverinfo: 'text+name'
+      };
+      
+      Plotly.newPlot('plotly-3d-graph', [trace1, trace2], {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        margin: {l: 0, r: 0, b: 0, t: 0},
+        scene: {
+          xaxis: { title: 'Production', color: '#8fb4d6', gridcolor: '#1d2620', zerolinecolor: '#34d399' },
+          yaxis: { title: 'Efficiency', color: '#8fb4d6', gridcolor: '#1d2620', zerolinecolor: '#34d399' },
+          zaxis: { title: 'Risk Score', color: '#8fb4d6', gridcolor: '#1d2620', zerolinecolor: '#e8a83c' },
+          bgcolor: 'rgba(0,0,0,0)'
+        },
+        legend: { font: {color: '#8fb4d6'}, x:0.8, y:0.9 }
+      }, {displayModeBar: false});
+    }
+  }
+}
+
+/* Close sidebar on nav click for mobile */
+document.addEventListener('click', function(e){
+  if(e.target.closest('.nav-item') && window.innerWidth<=980){
+    document.getElementById('sidebar').classList.remove('open');
+  }
+});
+
+/* Mock Google Login Flow */
+function showMockGoogleLogin() {
+  const modal = document.getElementById('mock-google-modal');
+  modal.style.display = 'flex';
+  document.getElementById('mock-google-email').value = 'demo@gmail.com';
+  document.getElementById('mock-google-email').style.border = '1px solid #dadce0';
+  document.getElementById('mock-google-step1').style.display = 'block';
+  document.getElementById('mock-google-step-pwd').style.display = 'none';
+  document.getElementById('mock-google-step2').style.display = 'none';
+  const err = document.getElementById('mock-google-err');
+  if(err) err.remove();
+}
+
+function closeMockGoogleLogin() {
+  document.getElementById('mock-google-modal').style.display = 'none';
+}
+
+// Watch for 'Next' button click to simulate loading then login
+document.getElementById('mock-google-modal').addEventListener('click', function(e) {
+  if ((e.target.innerText === 'Next' || e.target.innerText === 'Sign in') && e.target.tagName === 'BUTTON') {
+    if (document.getElementById('mock-google-step1').style.display !== 'none') {
+      const email = document.getElementById('mock-google-email').value.trim();
+      if(email !== 'demo@gmail.com' && email !== 'demo@geomine.ai') {
+        let err = document.getElementById('mock-google-err');
+        if(!err) {
+          err = document.createElement('div');
+          err.id = 'mock-google-err';
+          err.style.color = '#d93025';
+          err.style.fontSize = '12px';
+          err.style.marginTop = '4px';
+          err.style.textAlign = 'left';
+          document.getElementById('mock-google-email').parentNode.insertBefore(err, document.getElementById('mock-google-email').nextSibling);
+        }
+        err.innerText = "Couldn't find your Google Account (Use demo@gmail.com)";
+        document.getElementById('mock-google-email').style.border = '1px solid #d93025';
+        return;
+      }
+      
+      const errObj = document.getElementById('mock-google-err');
+      if(errObj) errObj.remove();
+      document.getElementById('mock-google-email').style.border = '1px solid #dadce0';
+      
+      document.getElementById('display-email').innerText = email;
+      document.getElementById('mock-google-password').value = 'password123';
+      document.getElementById('mock-google-step1').style.display = 'none';
+      document.getElementById('mock-google-step-pwd').style.display = 'block';
+    } else if (document.getElementById('mock-google-step-pwd').style.display !== 'none') {
+      document.getElementById('mock-google-step-pwd').style.display = 'none';
+      document.getElementById('mock-google-step2').style.display = 'block';
+      
+      // 1.5 seconds loading simulation
+      setTimeout(() => {
+        closeMockGoogleLogin();
+        enterApp();
+      }, 1500);
+    }
+  }
+});
+</script>
+<script src="premium.js"></script></body>
+</html>
+
