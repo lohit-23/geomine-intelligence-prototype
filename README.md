@@ -5,7 +5,8 @@ Geomine Intelligence is a web application prototype for analyzing and managing g
 ## Project Structure
 
 - `/frontend` - Contains the HTML, CSS, and vanilla JavaScript files for the user interface.
-- `/backend` - Contains the Node.js Express server that provides the API and WebSocket connections.
+- `/backend` - Contains the Node.js Express server providing the API and WebSocket connections.
+- `netlify.toml` - Netlify deployment configuration for serving the frontend.
 
 ## Prerequisites
 
@@ -13,24 +14,41 @@ Geomine Intelligence is a web application prototype for analyzing and managing g
 
 ## How to Run Locally
 
-### 1. Start the Backend API
+### Option A: Single Server (Recommended)
 
-Open a terminal and navigate to the `backend` directory:
+Navigate to the `backend` directory and start the server. It automatically serves both the backend API and the frontend dashboard on port 3000:
 ```bash
 cd backend
 npm install
 npm start
 ```
-The backend server will run on `http://localhost:3000`.
+Open your browser and navigate to:
+**`http://localhost:3000`**
 
-### 2. Start the Frontend
+---
 
-Open another terminal and navigate to the `frontend` directory. You can use any local HTTP server to serve the static files, for example using `npx http-server`:
-```bash
-cd frontend
-npx http-server -p 8080
-```
-Open your browser and navigate to `http://localhost:8080`.
+### Option B: Separate Frontend & Backend Servers
+
+1. **Start Backend**:
+   ```bash
+   cd backend
+   npm start
+   ```
+   Runs on `http://localhost:3000`.
+
+2. **Start Frontend**:
+   ```bash
+   cd frontend
+   npx http-server -p 8080
+   ```
+   Runs on `http://localhost:8080`.
+
+---
+
+## Deploying to Netlify
+
+- **Netlify Drop**: Drag and drop the `frontend/` folder directly to [app.netlify.com/drop](https://app.netlify.com/drop).
+- **Git Deployment**: Push to GitHub and link to Netlify. The included `netlify.toml` automatically configures the publish directory to `frontend`.
 
 ## Features
 
