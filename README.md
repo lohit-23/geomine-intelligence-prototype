@@ -47,7 +47,7 @@ Open your browser and navigate to:
 
 ## Deploying to Netlify
 
-- **Netlify Drop**: Drag and drop the `frontend/` folder directly to [app.netlify.com/drop](https://geomine-intelligence.netlify.app/).
+- **Netlify Drop**: Drag and drop the `frontend/` folder directly to [https://geomine-intelligence.netlify.app/](https://geomine-intelligence.netlify.app/).
 - **Git Deployment**: Push to GitHub and link to Netlify. The included `netlify.toml` automatically configures the publish directory to `frontend`.
 
 ## Features
